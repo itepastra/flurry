@@ -3,12 +3,13 @@
 
 use std::{
     cell::SyncUnsafeCell,
-    io::{self, Error, ErrorKind},
+    io::{self, Cursor, Error, ErrorKind},
     iter::once,
     sync::Arc,
 };
 
 use axum::{http::StatusCode, routing::get, Router};
+use image::{GenericImage, GenericImageView, Rgba};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
     net::TcpListener,
@@ -49,6 +50,21 @@ impl<T> FlutGrid<T> {
             return None;
         }
         return Some((y * self.size_x) + x);
+    }
+}
+
+impl GenericImageView for FlutGrid<u32> {
+    type Pixel = Rgba<u8>;
+
+    fn dimensions(&self) -> (u32, u32) {
+        return (self.size_x as u32, self.size_y as u32);
+    }
+
+    fn get_pixel(&self, x: u32, y: u32) -> Self::Pixel {
+        match self.get(x as u16, y as u16) {
+            None => todo!("out of bounds for images not supported"),
+            Some(color) => return Rgba(color.to_be_bytes()),
+        }
     }
 }
 
@@ -265,6 +281,11 @@ async fn main() -> io::Result<()> {
 
     let web_listener = TcpListener::bind("0.0.0.0:7792").await?;
     println!("bound web listener");
+
+    let img_asuc = asuc.clone();
+    tokio::spawn(async move {
+        let img_grids = unsafe { img_asuc.get().as_ref().unwrap() };
+    });
 
     let app = Router::new().route("/", get(root));
     tokio::spawn(async move { axum::serve(web_listener, app).await });
