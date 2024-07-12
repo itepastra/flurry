@@ -3,14 +3,14 @@
 
 use std::{
     cell::SyncUnsafeCell,
-    io::{self, Cursor, Error, ErrorKind},
+    io::{self, Error, ErrorKind},
     iter::once,
     sync::Arc,
     time::Duration,
 };
 
-use axum::{http::StatusCode, routing::get, Router};
-use image::{GenericImage, GenericImageView, Rgb, Rgba};
+use axum::{routing::get, Router};
+use image::{GenericImageView, Rgb};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
     net::TcpListener,
