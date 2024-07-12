@@ -6,10 +6,11 @@ use std::{
     io::{self, Cursor, Error, ErrorKind},
     iter::once,
     sync::Arc,
+    time::Duration,
 };
 
 use axum::{http::StatusCode, routing::get, Router};
-use image::{GenericImage, GenericImageView, Rgba};
+use image::{GenericImage, GenericImageView, Rgb, Rgba};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
     net::TcpListener,
@@ -19,6 +20,7 @@ extern crate test;
 
 trait Grid<I, V> {
     fn get(&self, x: I, y: I) -> Option<&V>;
+    fn get_unchecked(&self, x: I, y: I) -> &V;
     fn set(&mut self, x: I, y: I, value: V);
 }
 
@@ -54,17 +56,16 @@ impl<T> FlutGrid<T> {
 }
 
 impl GenericImageView for FlutGrid<u32> {
-    type Pixel = Rgba<u8>;
+    type Pixel = Rgb<u8>;
 
     fn dimensions(&self) -> (u32, u32) {
         return (self.size_x as u32, self.size_y as u32);
     }
 
     fn get_pixel(&self, x: u32, y: u32) -> Self::Pixel {
-        match self.get(x as u16, y as u16) {
-            None => todo!("out of bounds for images not supported"),
-            Some(color) => return Rgba(color.to_be_bytes()),
-        }
+        let pix = self.get_unchecked(x as u16, y as u16);
+        let [a, b, c, _] = pix.to_be_bytes();
+        return Rgb([a, b, c]);
     }
 }
 
@@ -81,6 +82,11 @@ impl<T> Grid<u16, T> for FlutGrid<T> {
             None => (),
             Some(idx) => self.cells[idx] = value,
         }
+    }
+
+    fn get_unchecked(&self, x: u16, y: u16) -> &T {
+        let idx = y as usize * self.size_x + x as usize;
+        return &self.cells[idx];
     }
 }
 
@@ -120,7 +126,6 @@ async fn process_msg<
     grids: &mut [FlutGrid<u32>; GRID_LENGTH],
 ) -> io::Result<()> {
     let fst = reader.read_u8().await;
-    println!("first byte is {:?}", fst);
     match fst {
         Ok(i) => match i {
             HELP_TEXT => todo!("HELP command check and message"),
@@ -202,7 +207,6 @@ async fn process_msg<
                             .chain(y.to_le_bytes())
                             .chain(color.to_be_bytes().into_iter().skip(1))
                             .collect::<Vec<_>>();
-                        println!("to write {:?}", towrite);
                         writer.write_all(towrite).await?;
                     }
                 }
@@ -215,7 +219,7 @@ async fn process_msg<
                 let r = reader.read_u8().await?;
                 let g = reader.read_u8().await?;
                 let b = reader.read_u8().await?;
-                let rgb = (r as u32) << 24 | (g as u32) << 16 | (b as u32) << 8;
+                let rgb = u32::from_be_bytes([r, g, b, 0xff]);
                 set_pixel_rgba(grids, canvas, x, y, rgb);
                 return Ok(());
             }
@@ -245,11 +249,8 @@ where
     let mut reader = BufReader::new(reader);
     let mut writer = BufWriter::new(writer);
     loop {
-        println!("processing next...");
         match process_msg(&mut reader, &mut writer, grids).await {
-            Ok(()) => {
-                println!("msg was ok");
-            }
+            Ok(()) => {}
             Err(err) if err.kind() == ErrorKind::UnexpectedEof => {
                 let _ = writer.flush().await;
                 return Ok(());
@@ -283,8 +284,23 @@ async fn main() -> io::Result<()> {
     println!("bound web listener");
 
     let img_asuc = asuc.clone();
-    tokio::spawn(async move {
+    let _ = tokio::spawn(async move {
         let img_grids = unsafe { img_asuc.get().as_ref().unwrap() };
+        loop {
+            let img = img_grids[0]
+                .view(0, 0, img_grids[0].width(), img_grids[0].height())
+                .to_image();
+            println!("starting save");
+            match img.save("test.jpg") {
+                Ok(()) => (),
+                Err(err) => {
+                    eprintln!("{}", err);
+                    return;
+                }
+            };
+            println!("finished save, sleeping");
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
     });
 
     let app = Router::new().route("/", get(root));
