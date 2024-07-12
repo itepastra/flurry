@@ -1,9 +1,12 @@
 #![feature(test)]
+#![feature(sync_unsafe_cell)]
 
 use std::{
+    cell::SyncUnsafeCell,
     io::{self, Error, ErrorKind},
     iter::{self, once},
-    vec,
+    sync::Arc,
+    usize, vec,
 };
 
 use tokio::{
@@ -94,7 +97,7 @@ fn get_pixel(grids: &mut [FlutGrid<u32>], canvas: u8, x: u16, y: u16) -> Option<
 
 async fn process_msg<T: AsyncReadExt + AsyncWriteExt + std::marker::Unpin>(
     stream: &mut T,
-    grids: &mut [FlutGrid<u32>],
+    grids: &mut [FlutGrid<u32>; GRID_LENGTH],
 ) -> io::Result<()> {
     match stream.read_u8().await {
         Ok(i) => match i {
@@ -209,7 +212,7 @@ async fn process_msg<T: AsyncReadExt + AsyncWriteExt + std::marker::Unpin>(
 
 async fn process_socket<T: AsyncRead + AsyncWrite + std::marker::Unpin>(
     socket: T,
-    grids: &mut [FlutGrid<u32>],
+    grids: &mut [FlutGrid<u32>; GRID_LENGTH],
 ) -> io::Result<()> {
     let mut stream = BufStream::new(socket);
     loop {
@@ -220,19 +223,26 @@ async fn process_socket<T: AsyncRead + AsyncWrite + std::marker::Unpin>(
     }
 }
 
+const GRID_LENGTH: usize = 1;
+
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    let mut grids = [FlutGrid::init(800, 600, 0xff00ff)];
+    let grids = [FlutGrid::init(800, 600, 0xff00ff)];
+    assert_eq!(grids.len(), GRID_LENGTH);
+
     let flut_listener = TcpListener::bind("0.0.0.0:7791").await?;
+    let asuc = Arc::new(SyncUnsafeCell::new(grids));
 
     loop {
         let (socket, _) = flut_listener.accept().await?;
-        match process_socket(socket, &mut grids).await {
-            Ok(_) => println!("socket closed okay"),
-            Err(err) => {
-                eprintln!("received illegal command: {}", err)
+        let asuc = asuc.clone();
+        let _ = tokio::spawn(async move {
+            let grids = unsafe { asuc.get().as_mut().unwrap() };
+            match process_socket(socket, grids).await {
+                Ok(()) => return Ok(()),
+                Err(err) => return Err(err),
             }
-        }
+        });
     }
 }
 
