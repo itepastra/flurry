@@ -102,6 +102,7 @@ const SET_PX_RGBA_BIN: u8 = 129;
 const SET_PX_W_BIN: u8 = 130;
 
 const SET_PX_RGB_BIN_LENGTH: usize = 8;
+const GRID_LENGTH: usize = 1;
 
 fn set_pixel_rgba(grids: &mut [FlutGrid<u32>], canvas: u8, x: u16, y: u16, rgb: u32) {
     match grids.get_mut(canvas as usize) {
@@ -115,6 +116,75 @@ fn get_pixel(grids: &mut [FlutGrid<u32>], canvas: u8, x: u16, y: u16) -> Option<
         Some(grid) => return grid.get(x, y),
         None => return None,
     }
+}
+
+async fn process_lock<
+    R: AsyncReadExt + std::marker::Unpin,
+    W: AsyncWriteExt + std::marker::Unpin,
+>(
+    reader: &mut R,
+    writer: &mut W,
+    grids: &mut [FlutGrid<u32>; GRID_LENGTH],
+) -> io::Result<()> {
+    let amount = reader.read_u16_le().await?;
+    let command = reader.read_u8().await?;
+    let lockmask = reader.read_u16().await?;
+    let mut buf = vec![0; lockmask.count_ones() as usize];
+    let statics = reader.read_exact(&mut buf).await?;
+
+    match command {
+        GET_PX_BIN => todo!("GET pixel lock"),
+        SET_PX_RGB_BIN => {
+            let per = SET_PX_RGB_BIN_LENGTH - statics;
+            let mut j = 0;
+            let mut a;
+            let static_buf: Vec<Option<u8>> = (0..SET_PX_RGB_BIN_LENGTH)
+                .map(|i| match lockmask >> (15 - i) & 1 {
+                    1 => {
+                        let b = Some(buf[j]);
+
+                        j += 1;
+                        return b;
+                    }
+                    0 => None,
+                    k => panic!("WTF, how is {} not 0 or 1", k),
+                })
+                .collect();
+            let mut mod_buf: Vec<u8> = vec![0; per];
+            for _ in 0..amount {
+                a = 0;
+                let _ = reader.read_exact(&mut mod_buf).await?;
+                let aa = static_buf
+                    .iter()
+                    .map(|x| *match x {
+                        Some(val) => val,
+                        None => {
+                            let b = mod_buf[a];
+                            a += 1;
+                            return b;
+                        }
+                    })
+                    .map(|z| z)
+                    .collect::<Vec<_>>();
+                match grids.get_mut(aa[0] as usize) {
+                    Some(grid) => grid.set(
+                        u16::from_le_bytes([aa[1], aa[2]]),
+                        u16::from_le_bytes([aa[3], aa[4]]),
+                        u32::from_be_bytes([aa[5], aa[6], aa[7], 0]),
+                    ),
+                    None => (),
+                }
+            }
+        }
+        SET_PX_RGBA_BIN => todo!("Set rgba lock"),
+        SET_PX_W_BIN => todo!("set w lock"),
+        _ => {
+            eprintln!("not a cmd");
+            return Err(Error::from(ErrorKind::InvalidInput));
+        }
+    }
+
+    return Ok(());
 }
 
 async fn process_msg<
@@ -133,67 +203,7 @@ async fn process_msg<
             PX_TEXT => todo!("PX command handling"),
             HELP_BIN => todo!("HELP command message"),
             SIZE_BIN => todo!("SIZE command check and message"),
-            LOCK => {
-                let amount = reader.read_u16_le().await?;
-                let command = reader.read_u8().await?;
-                let lockmask = reader.read_u16().await?;
-                let mut buf = vec![0; lockmask.count_ones() as usize];
-                let statics = reader.read_exact(&mut buf).await?;
-
-                match command {
-                    GET_PX_BIN => todo!("GET pixel lock"),
-                    SET_PX_RGB_BIN => {
-                        let per = SET_PX_RGB_BIN_LENGTH - statics;
-                        let mut j = 0;
-                        let mut a;
-                        let static_buf: Vec<Option<u8>> = (0..SET_PX_RGB_BIN_LENGTH)
-                            .map(|i| match lockmask >> (15 - i) & 1 {
-                                1 => {
-                                    let b = Some(buf[j]);
-
-                                    j += 1;
-                                    return b;
-                                }
-                                0 => None,
-                                _ => todo!("WTF"),
-                            })
-                            .collect();
-                        let mut mod_buf: Vec<u8> = vec![0; per];
-                        for _ in 0..amount {
-                            a = 0;
-                            let _ = reader.read_exact(&mut mod_buf).await?;
-                            let aa = static_buf
-                                .iter()
-                                .map(|x| *match x {
-                                    Some(val) => val,
-                                    None => {
-                                        let b = mod_buf[a];
-                                        a += 1;
-                                        return b;
-                                    }
-                                })
-                                .map(|z| z)
-                                .collect::<Vec<_>>();
-                            match grids.get_mut(aa[0] as usize) {
-                                Some(grid) => grid.set(
-                                    u16::from_le_bytes([aa[1], aa[2]]),
-                                    u16::from_le_bytes([aa[3], aa[4]]),
-                                    u32::from_be_bytes([aa[5], aa[6], aa[7], 0]),
-                                ),
-                                None => (),
-                            }
-                        }
-                    }
-                    SET_PX_RGBA_BIN => todo!("Set rgba lock"),
-                    SET_PX_W_BIN => todo!("set w lock"),
-                    _ => {
-                        eprintln!("not a cmd");
-                        return Err(Error::from(ErrorKind::InvalidInput));
-                    }
-                }
-
-                return Ok(());
-            }
+            LOCK => process_lock(reader, writer, grids).await,
             GET_PX_BIN => {
                 let canvas = reader.read_u8().await?;
                 let x = reader.read_u16_le().await?;
@@ -266,8 +276,6 @@ where
 async fn root() -> &'static str {
     return "hiii";
 }
-
-const GRID_LENGTH: usize = 1;
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
