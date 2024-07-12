@@ -19,6 +19,7 @@
 			pkgs.mkShell {
 			buildInputs = [
 				pkgs.rustup
+				pkgs.wgo
 			];
 		});
 	};
