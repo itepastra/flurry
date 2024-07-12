@@ -5,11 +5,15 @@ edition = "2021"
 
 [dependencies]
 axum = { version = "0.7.5" }
+bytes = "1.6.0"
 futures = "0.3.30"
+futures-util = "0.3.30"
 http-body-util = "0.1.2"
 image = "0.25.1"
 tokio = { version = "1.38", features = ["full"] }
+tokio-io = "0.1.13"
 tokio-test = "*"
+tokio-util = { version = "0.7.11", features = ["codec"] }
 
 [profile.dev]
 opt-level = 1

@@ -6,19 +6,15 @@ use std::{
     hash::{DefaultHasher, Hash, Hasher},
     io::{self, Cursor, Error, ErrorKind},
     iter::once,
+    pin::Pin,
     sync::{atomic::AtomicU64, Arc, RwLock},
+    task::Poll,
     time::Duration,
 };
 
-use axum::{
-    body::{Body, BodyDataStream},
-    http::header,
-    response::IntoResponse,
-    routing::get,
-    Router,
-};
 use futures::Stream;
-use image::{GenericImageView, ImageBuffer, Rgb};
+use hyper::body::Frame;
+use image::{GenericImageView, Rgb};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
     net::TcpListener,
@@ -98,18 +94,11 @@ impl<T> Grid<u16, T> for FlutGrid<T> {
     }
 }
 
+#[derive(Clone)]
 struct ImageStreamer {
     v: Arc<RwLock<Cursor<Vec<u8>>>>,
     last: Arc<RwLock<u64>>,
-}
-
-impl Clone for ImageStreamer {
-    fn clone(&self) -> Self {
-        return ImageStreamer {
-            v: self.v.clone(),
-            last: self.last.clone(),
-        };
-    }
+    last_attempt: u64,
 }
 
 impl ImageStreamer {
@@ -119,6 +108,7 @@ impl ImageStreamer {
         return ImageStreamer {
             v: Arc::new(RwLock::new(Cursor::new(v))),
             last: Arc::new(RwLock::new(hasher.finish())),
+            last_attempt: hasher.finish(),
         };
     }
 
@@ -138,6 +128,7 @@ impl ImageStreamer {
             } else {
                 *self.last.write().unwrap() = hasher.finish();
             }
+            println!("ticking...");
             let img = img_grids[grid_id]
                 .view(
                     0,
@@ -150,37 +141,40 @@ impl ImageStreamer {
             let _ = img.write_to(&mut *new, image::ImageFormat::Png);
         }
     }
+}
 
-    fn get_stream(&self) -> ImageStreamReader {
-        return ImageStreamReader {
-            v: self.v.clone(),
-            last: self.last.clone(),
-            last_attempt: 0,
-        };
+impl ImageStreamer {
+    fn has_next(&self) -> Poll<u64> {
+        let now = *self.last.read().unwrap();
+        if now == self.last_attempt {
+            return Poll::Pending;
+        }
+        return Poll::Ready(now);
     }
 }
 
-struct ImageStreamReader {
-    v: Arc<RwLock<Cursor<Vec<u8>>>>,
-    last: Arc<RwLock<u64>>,
-    last_attempt: u64,
-}
-
-impl Stream for ImageStreamReader {
-    type Item = io::Result<Vec<u8>>;
+impl Stream for ImageStreamer {
+    type Item = io::Result<hyper::body::Frame<bytes::Bytes>>;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
         _cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Self::Item>> {
-        let now = *self.last.read().unwrap();
-        if now == self.last_attempt {
-            return std::task::Poll::Pending;
+        loop {
+            let new_hash = match Pin::new(&mut self).has_next() {
+                Poll::Ready(i) => Some(i),
+                Poll::Pending => None,
+            };
+            if new_hash.is_none() {
+                return Poll::Pending;
+            }
+            println!("got one");
+            self.last_attempt = new_hash.unwrap();
+            let r = self.v.read().unwrap();
+            let v: Vec<u8> = (*r.clone().into_inner()).to_vec();
+
+            return Poll::Ready(Some(Ok(Frame::data(v.into()))));
         }
-        self.last_attempt = now;
-        let r = self.v.read().unwrap();
-        let v: Vec<u8> = (*r.clone().into_inner()).to_vec();
-        return std::task::Poll::Ready(Some(Ok(v)));
     }
 }
 
@@ -377,14 +371,10 @@ where
     }
 }
 
-async fn root() -> &'static str {
-    return "hiii";
-}
-
-async fn image_stream(is: ImageStreamReader) -> impl IntoResponse {
-    let header = [(header::CONTENT_TYPE, "image/jpeg")];
-
-    (header, Body::from_stream(is))
+async fn web(listener: TcpListener, image_streamer: ImageStreamer) -> io::Result<()> {
+    loop {
+        todo!("idk yet");
+    }
 }
 
 #[tokio::main]
@@ -398,9 +388,6 @@ async fn main() -> io::Result<()> {
     let flut_listener = TcpListener::bind("0.0.0.0:7791").await?;
     println!("bound flut listener");
 
-    let web_listener = TcpListener::bind("0.0.0.0:7792").await?;
-    println!("bound web listener");
-
     let img_asuc = asuc.clone();
     let img_grids = unsafe { img_asuc.get().as_ref().unwrap() };
     let streamer = ImageStreamer::init();
@@ -411,13 +398,10 @@ async fn main() -> io::Result<()> {
     });
     println!("streamer started");
 
-    let app = Router::new().route("/", get(root)).route(
-        "/image",
-        get(move || {
-            return image_stream(streamer.clone().get_stream());
-        }),
-    );
-    tokio::spawn(async move { axum::serve(web_listener, app).await });
+    let web_listener = TcpListener::bind("0.0.0.0:7792").await?;
+    println!("bound web listener");
+
+    let _ = tokio::spawn(async move { web(web_listener, streamer) });
     println!("web server started");
 
     loop {
