@@ -8,6 +8,7 @@ use std::{
     sync::Arc,
 };
 
+use axum::{http::StatusCode, routing::get, Router};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
     net::TcpListener,
@@ -245,15 +246,29 @@ where
     }
 }
 
+async fn root() -> &'static str {
+    return "hiii";
+}
+
 const GRID_LENGTH: usize = 1;
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
+    println!("Start initialisation");
     let grids = [FlutGrid::init(800, 600, 0xff00ff)];
     assert_eq!(grids.len(), GRID_LENGTH);
+    let asuc = Arc::new(SyncUnsafeCell::new(grids));
+    println!("created grids");
 
     let flut_listener = TcpListener::bind("0.0.0.0:7791").await?;
-    let asuc = Arc::new(SyncUnsafeCell::new(grids));
+    println!("bound flut listener");
+
+    let web_listener = TcpListener::bind("0.0.0.0:7792").await?;
+    println!("bound web listener");
+
+    let app = Router::new().route("/", get(root));
+    tokio::spawn(async move { axum::serve(web_listener, app).await });
+    println!("web server started");
 
     loop {
         let (mut socket, _) = flut_listener.accept().await?;
