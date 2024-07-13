@@ -20,6 +20,8 @@
 			buildInputs = [
 				pkgs.rustup
 				pkgs.wgo
+				pkgs.cargo-flamegraph
+				pkgs.cargo-udeps
 			];
 		});
 	};
