@@ -265,7 +265,7 @@ async fn process_lock<
                         grid.set(
                             u16::from_le_bytes([aa[1], aa[2]]),
                             u16::from_le_bytes([aa[3], aa[4]]),
-                            u32::from_be_bytes([aa[5], aa[6], aa[7], 0]),
+                            u32::from_be_bytes([aa[5], aa[6], aa[7], 0xff]),
                         );
                         increment_counter()
                     }
@@ -312,7 +312,7 @@ async fn process_msg<
                             .chain(once(canvas))
                             .chain(x.to_le_bytes())
                             .chain(y.to_le_bytes())
-                            .chain(color.to_be_bytes().into_iter().skip(1))
+                            .chain(color.to_be_bytes().into_iter().take(3))
                             .collect::<Vec<_>>();
                         writer.write_all(towrite).await?;
                     }
@@ -371,16 +371,20 @@ where
     }
 }
 
-async fn web(listener: TcpListener, image_streamer: ImageStreamer) -> io::Result<()> {
-    loop {
-        todo!("idk yet");
-    }
+async fn image_handler(State(state): State<ImageStreamer>) {
+    let cstrem = state.clone();
+
+    let header = [(header::CONTENT_TYPE, "image/jpeg")];
+
+    let body = StreamBody::new(cstrem);
+
+    (header, body);
 }
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
     println!("Start initialisation");
-    let grids = [FlutGrid::init(800, 600, 0xff00ff)];
+    let grids = [FlutGrid::init(800, 600, 0xff00ffff)];
     assert_eq!(grids.len(), GRID_LENGTH);
     let asuc = Arc::new(SyncUnsafeCell::new(grids));
     println!("created grids");
@@ -505,8 +509,8 @@ mod tests {
             .build();
         let writer = tokio_test::io::Builder::new().build();
         assert_ok!(process_socket(reader, writer, &mut grids).await);
-        assert_eq!(grids[0].get(16, 32), Some(&0x00000000));
-        assert_eq!(grids[0].get(16, 33), Some(&0x02030500));
+        assert_eq!(grids[0].get(16, 32), Some(&0x000000ff));
+        assert_eq!(grids[0].get(16, 33), Some(&0x020305ff));
     }
 
     #[tokio::test]
@@ -534,14 +538,14 @@ mod tests {
         let writer = tokio_test::io::Builder::new().build();
         assert_ok!(process_socket(reader, writer, &mut grids).await);
 
-        assert_eq!(grids[0].get(100, 0), Some(&0x02030400));
-        assert_eq!(grids[0].get(101, 0), Some(&0x02030500));
-        assert_eq!(grids[0].get(102, 0), Some(&0x02030600));
+        assert_eq!(grids[0].get(100, 0), Some(&0x020304ff));
+        assert_eq!(grids[0].get(101, 0), Some(&0x020305ff));
+        assert_eq!(grids[0].get(102, 0), Some(&0x020306ff));
     }
 
     #[tokio::test]
     async fn test_get_rgb_bin() {
-        let mut grids = [FlutGrid::init(800, 600, 0xFF00F0)];
+        let mut grids = [FlutGrid::init(800, 600, 0xFF00F0FF)];
         let reader = tokio_test::io::Builder::new()
             .read(&[GET_PX_BIN, 0, 15, 0, 21, 0])
             .read(&[GET_PX_BIN, 0, 16, 0, 21, 0])
@@ -553,6 +557,6 @@ mod tests {
             .write(&[GET_PX_BIN, 0, 17, 0, 21, 0, 0xff, 0x00, 0xf0])
             .build();
         assert_ok!(process_socket(reader, writer, &mut grids).await);
-        assert_eq!(grids[0].get(15, 21), Some(&0xff00f0));
+        assert_eq!(grids[0].get(15, 21), Some(&0xff00f0ff));
     }
 }
