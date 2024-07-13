@@ -3,24 +3,12 @@
 
 use std::{
     cell::SyncUnsafeCell,
-    hash::{DefaultHasher, Hash, Hasher},
-    io::{self, Cursor, Error, ErrorKind},
+    io::{self, Error, ErrorKind},
     iter::once,
-    pin::Pin,
-    sync::{atomic::AtomicU64, Arc, RwLock},
-    task::Poll,
+    sync::{atomic::AtomicU64, Arc},
     time::Duration,
 };
 
-use axum::{
-    body::Body,
-    extract::State,
-    http::header,
-    response::{IntoResponse, Response},
-    routing::get,
-};
-use futures::{Stream, StreamExt};
-use http_body_util::StreamBody;
 use image::{GenericImageView, Rgb};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
@@ -101,90 +89,6 @@ impl<T> Grid<u16, T> for FlutGrid<T> {
     }
 }
 
-#[derive(Clone)]
-struct ImageStreamer {
-    v: Arc<RwLock<Cursor<Vec<u8>>>>,
-    last: Arc<RwLock<u64>>,
-    last_attempt: u64,
-}
-
-impl ImageStreamer {
-    fn init() -> ImageStreamer {
-        let v = Vec::new();
-        let hasher = DefaultHasher::default();
-        return ImageStreamer {
-            v: Arc::new(RwLock::new(Cursor::new(v))),
-            last: Arc::new(RwLock::new(hasher.finish())),
-            last_attempt: hasher.finish(),
-        };
-    }
-
-    async fn start(
-        &self,
-        img_grids: &[FlutGrid<u32>; GRID_LENGTH],
-        grid_id: usize,
-    ) -> io::Result<()> {
-        println!("start called");
-        let mut interval = tokio::time::interval(Duration::from_millis(25));
-        loop {
-            interval.tick().await;
-            let mut hasher = DefaultHasher::default();
-            img_grids[grid_id].cells.hash(&mut hasher);
-            if hasher.finish() == *self.last.read().unwrap() {
-                continue;
-            } else {
-                *self.last.write().unwrap() = hasher.finish();
-            }
-            println!("ticking...");
-            let img = img_grids[grid_id]
-                .view(
-                    0,
-                    0,
-                    img_grids[grid_id].width(),
-                    img_grids[grid_id].height(),
-                )
-                .to_image();
-            let mut new = self.v.write().unwrap();
-            let _ = img.write_to(&mut *new, image::ImageFormat::Png);
-        }
-    }
-}
-
-impl ImageStreamer {
-    fn has_next(&self) -> Poll<u64> {
-        let now = *self.last.read().unwrap();
-        if now == self.last_attempt {
-            return Poll::Pending;
-        }
-        return Poll::Ready(now);
-    }
-}
-
-impl Stream for ImageStreamer {
-    type Item = io::Result<Vec<u8>>;
-
-    fn poll_next(
-        mut self: std::pin::Pin<&mut Self>,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Self::Item>> {
-        loop {
-            let new_hash = match Pin::new(&mut self).has_next() {
-                Poll::Ready(i) => Some(i),
-                Poll::Pending => None,
-            };
-            if new_hash.is_none() {
-                return Poll::Pending;
-            }
-            println!("got one");
-            self.last_attempt = new_hash.unwrap();
-            let r = self.v.read().unwrap();
-            let v: Vec<u8> = (*r.clone().into_inner()).to_vec();
-
-            return Poll::Ready(Some(Ok(v)));
-        }
-    }
-}
-
 const HELP_TEXT: u8 = 72;
 const SIZE_TEXT: u8 = 83;
 const PX_TEXT: u8 = 80;
@@ -224,7 +128,7 @@ async fn process_lock<
     W: AsyncWriteExt + std::marker::Unpin,
 >(
     reader: &mut R,
-    writer: &mut W,
+    _writer: &mut W,
     grids: &mut [FlutGrid<u32>; GRID_LENGTH],
 ) -> io::Result<()> {
     let amount = reader.read_u16_le().await?;
@@ -378,17 +282,6 @@ where
     }
 }
 
-#[axum::debug_handler]
-async fn image_handler(State(state): State<ImageStreamer>) -> impl IntoResponse {
-    let cstrem = state.clone();
-
-    let header = [(header::CONTENT_TYPE, "image/jpeg")];
-
-    let body = Body::from_stream(cstrem);
-
-    (header, body).into_response()
-}
-
 #[tokio::main]
 async fn main() -> io::Result<()> {
     println!("Start initialisation");
@@ -400,27 +293,18 @@ async fn main() -> io::Result<()> {
     let flut_listener = TcpListener::bind("0.0.0.0:7791").await?;
     println!("bound flut listener");
 
-    let img_asuc = asuc.clone();
-    let img_grids = unsafe { img_asuc.get().as_ref().unwrap() };
-    let streamer = ImageStreamer::init();
-    let cstrm = streamer.clone();
-    let _ = tokio::spawn(async move {
-        println!("staring streming");
-        let _ = cstrm.start(&img_grids, 0).await;
-    });
-    println!("streamer started");
+    //let img_asuc = asuc.clone();
+    //let img_grids = unsafe { img_asuc.get().as_ref().unwrap() };
 
-    let web_listener = TcpListener::bind("0.0.0.0:7792").await?;
     println!("bound web listener");
-
-    let router = axum::Router::new()
-        .route("/image", get(image_handler))
-        .with_state(streamer);
-
     let _ = tokio::spawn(async move {
-        return axum::serve(web_listener, router).await;
+        let mut interval = tokio::time::interval(Duration::from_millis(1000));
+        loop {
+            interval.tick().await;
+            let cnt = COUNTER.load(std::sync::atomic::Ordering::Relaxed);
+            println!("{} pixels were changed", cnt);
+        }
     });
-    println!("web server started");
 
     loop {
         let (mut socket, _) = flut_listener.accept().await?;
