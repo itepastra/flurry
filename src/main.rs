@@ -12,8 +12,15 @@ use std::{
     time::Duration,
 };
 
-use futures::Stream;
-use hyper::body::Frame;
+use axum::{
+    body::Body,
+    extract::State,
+    http::header,
+    response::{IntoResponse, Response},
+    routing::get,
+};
+use futures::{Stream, StreamExt};
+use http_body_util::StreamBody;
 use image::{GenericImageView, Rgb};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
@@ -154,7 +161,7 @@ impl ImageStreamer {
 }
 
 impl Stream for ImageStreamer {
-    type Item = io::Result<hyper::body::Frame<bytes::Bytes>>;
+    type Item = io::Result<Vec<u8>>;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
@@ -173,7 +180,7 @@ impl Stream for ImageStreamer {
             let r = self.v.read().unwrap();
             let v: Vec<u8> = (*r.clone().into_inner()).to_vec();
 
-            return Poll::Ready(Some(Ok(Frame::data(v.into()))));
+            return Poll::Ready(Some(Ok(v)));
         }
     }
 }
@@ -371,14 +378,15 @@ where
     }
 }
 
-async fn image_handler(State(state): State<ImageStreamer>) {
+#[axum::debug_handler]
+async fn image_handler(State(state): State<ImageStreamer>) -> impl IntoResponse {
     let cstrem = state.clone();
 
     let header = [(header::CONTENT_TYPE, "image/jpeg")];
 
-    let body = StreamBody::new(cstrem);
+    let body = Body::from_stream(cstrem);
 
-    (header, body);
+    (header, body).into_response()
 }
 
 #[tokio::main]
@@ -405,7 +413,13 @@ async fn main() -> io::Result<()> {
     let web_listener = TcpListener::bind("0.0.0.0:7792").await?;
     println!("bound web listener");
 
-    let _ = tokio::spawn(async move { web(web_listener, streamer) });
+    let router = axum::Router::new()
+        .route("/image", get(image_handler))
+        .with_state(streamer);
+
+    let _ = tokio::spawn(async move {
+        return axum::serve(web_listener, router).await;
+    });
     println!("web server started");
 
     loop {
