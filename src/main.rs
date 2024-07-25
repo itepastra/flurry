@@ -1,6 +1,8 @@
 #![feature(test)]
 #![feature(sync_unsafe_cell)]
 
+mod grid;
+
 use std::{
     cell::SyncUnsafeCell,
     io::{self, Error, ErrorKind},
@@ -9,85 +11,13 @@ use std::{
     time::Duration,
 };
 
-use image::{GenericImageView, Rgb};
+use grid::Grid;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
     net::TcpListener,
 };
 
 extern crate test;
-
-trait Grid<I, V> {
-    fn get(&self, x: I, y: I) -> Option<&V>;
-    fn get_unchecked(&self, x: I, y: I) -> &V;
-    fn set(&mut self, x: I, y: I, value: V);
-}
-
-struct FlutGrid<T> {
-    size_x: usize,
-    size_y: usize,
-    cells: Vec<T>,
-}
-
-impl<T: Clone> FlutGrid<T> {
-    fn init(size_x: usize, size_y: usize, value: T) -> FlutGrid<T> {
-        let mut vec = Vec::with_capacity(size_x * size_y);
-        for _ in 0..(size_x * size_y) {
-            vec.push(value.clone());
-        }
-        return FlutGrid {
-            size_x,
-            size_y,
-            cells: vec,
-        };
-    }
-}
-
-impl<T> FlutGrid<T> {
-    fn index(&self, x: u16, y: u16) -> Option<usize> {
-        let x = x as usize;
-        let y = y as usize;
-        if x >= self.size_x || y >= self.size_y {
-            return None;
-        }
-        return Some((y * self.size_x) + x);
-    }
-}
-
-impl GenericImageView for FlutGrid<u32> {
-    type Pixel = Rgb<u8>;
-
-    fn dimensions(&self) -> (u32, u32) {
-        return (self.size_x as u32, self.size_y as u32);
-    }
-
-    fn get_pixel(&self, x: u32, y: u32) -> Self::Pixel {
-        let pix = self.get_unchecked(x as u16, y as u16);
-        let [a, b, c, _] = pix.to_be_bytes();
-        return Rgb([a, b, c]);
-    }
-}
-
-impl<T> Grid<u16, T> for FlutGrid<T> {
-    fn get(&self, x: u16, y: u16) -> Option<&T> {
-        match self.index(x, y) {
-            None => None,
-            Some(idx) => Some(&self.cells[idx]),
-        }
-    }
-
-    fn set(&mut self, x: u16, y: u16, value: T) {
-        match self.index(x, y) {
-            None => (),
-            Some(idx) => self.cells[idx] = value,
-        }
-    }
-
-    fn get_unchecked(&self, x: u16, y: u16) -> &T {
-        let idx = y as usize * self.size_x + x as usize;
-        return &self.cells[idx];
-    }
-}
 
 const HELP_TEXT: u8 = 72;
 const SIZE_TEXT: u8 = 83;
@@ -105,14 +35,14 @@ const GRID_LENGTH: usize = 1;
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
-fn set_pixel_rgba(grids: &mut [FlutGrid<u32>], canvas: u8, x: u16, y: u16, rgb: u32) {
+fn set_pixel_rgba(grids: &mut [grid::FlutGrid<u32>], canvas: u8, x: u16, y: u16, rgb: u32) {
     match grids.get_mut(canvas as usize) {
         Some(grid) => grid.set(x, y, rgb),
         None => (),
     }
 }
 
-fn get_pixel(grids: &mut [FlutGrid<u32>], canvas: u8, x: u16, y: u16) -> Option<&u32> {
+fn get_pixel(grids: &mut [grid::FlutGrid<u32>], canvas: u8, x: u16, y: u16) -> Option<&u32> {
     match grids.get_mut(canvas as usize) {
         Some(grid) => return grid.get(x, y),
         None => return None,
@@ -129,7 +59,7 @@ async fn process_lock<
 >(
     reader: &mut R,
     _writer: &mut W,
-    grids: &mut [FlutGrid<u32>; GRID_LENGTH],
+    grids: &mut [grid::FlutGrid<u32>; GRID_LENGTH],
 ) -> io::Result<()> {
     let amount = reader.read_u16_le().await?;
     let command = reader.read_u8().await?;
@@ -201,7 +131,7 @@ async fn process_msg<
 >(
     reader: &mut R,
     writer: &mut W,
-    grids: &mut [FlutGrid<u32>; GRID_LENGTH],
+    grids: &mut [grid::FlutGrid<u32>; GRID_LENGTH],
 ) -> io::Result<()> {
     let fst = reader.read_u8().await;
     match fst {
@@ -230,18 +160,7 @@ async fn process_msg<
                 }
                 return Ok(());
             }
-            SET_PX_RGB_BIN => {
-                let canvas = reader.read_u8().await?;
-                let x = reader.read_u16_le().await?;
-                let y = reader.read_u16_le().await?;
-                let r = reader.read_u8().await?;
-                let g = reader.read_u8().await?;
-                let b = reader.read_u8().await?;
-                let rgb = u32::from_be_bytes([r, g, b, 0xff]);
-                set_pixel_rgba(grids, canvas, x, y, rgb);
-                increment_counter();
-                return Ok(());
-            }
+            SET_PX_RGB_BIN => set_px_rgb_bin(reader, grids).await,
             SET_PX_RGBA_BIN => todo!("SET rgba"),
             SET_PX_W_BIN => todo!("SET w"),
             _ => {
@@ -256,10 +175,33 @@ async fn process_msg<
     }
 }
 
+async fn rgb_bin_read<R: AsyncReadExt + std::marker::Unpin>(
+    reader: &mut R,
+) -> io::Result<(u8, u16, u16, u8, u8, u8)> {
+    let canvas = reader.read_u8().await?;
+    let x = reader.read_u16_le().await?;
+    let y = reader.read_u16_le().await?;
+    let r = reader.read_u8().await?;
+    let g = reader.read_u8().await?;
+    let b = reader.read_u8().await?;
+    return Ok((canvas, x, y, r, g, b));
+}
+
+async fn set_px_rgb_bin<R: AsyncReadExt + std::marker::Unpin>(
+    reader: &mut R,
+    grids: &mut [grid::FlutGrid<u32>; GRID_LENGTH],
+) -> io::Result<()> {
+    let (canvas, x, y, r, g, b) = rgb_bin_read(reader).await?;
+    let rgb = u32::from_be_bytes([r, g, b, 0xff]);
+    set_pixel_rgba(grids, canvas, x, y, rgb);
+    increment_counter();
+    return Ok(());
+}
+
 async fn process_socket<W, R>(
     reader: R,
     writer: W,
-    grids: &mut [FlutGrid<u32>; GRID_LENGTH],
+    grids: &mut [grid::FlutGrid<u32>; GRID_LENGTH],
 ) -> io::Result<()>
 where
     W: AsyncWriteExt + std::marker::Unpin,
@@ -282,10 +224,19 @@ where
     }
 }
 
+async fn listen_handle() {
+    let mut interval = tokio::time::interval(Duration::from_millis(1000));
+    loop {
+        interval.tick().await;
+        let cnt = COUNTER.load(std::sync::atomic::Ordering::Relaxed);
+        println!("{} pixels were changed", cnt);
+    }
+}
+
 #[tokio::main]
 async fn main() -> io::Result<()> {
     println!("Start initialisation");
-    let grids = [FlutGrid::init(800, 600, 0xff00ffff)];
+    let grids = [grid::FlutGrid::init(800, 600, 0xff00ffff)];
     assert_eq!(grids.len(), GRID_LENGTH);
     let asuc = Arc::new(SyncUnsafeCell::new(grids));
     println!("created grids");
@@ -293,18 +244,11 @@ async fn main() -> io::Result<()> {
     let flut_listener = TcpListener::bind("0.0.0.0:7791").await?;
     println!("bound flut listener");
 
-    //let img_asuc = asuc.clone();
-    //let img_grids = unsafe { img_asuc.get().as_ref().unwrap() };
+    let img_grids = unsafe { asuc.get().as_ref().unwrap() };
+    let web_listener = TcpListener::bind("0.0.0.0:7792").await?;
 
     println!("bound web listener");
-    let _ = tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_millis(1000));
-        loop {
-            interval.tick().await;
-            let cnt = COUNTER.load(std::sync::atomic::Ordering::Relaxed);
-            println!("{} pixels were changed", cnt);
-        }
-    });
+    let _ = tokio::spawn(listen_handle());
 
     loop {
         let (mut socket, _) = flut_listener.accept().await?;
@@ -323,80 +267,8 @@ async fn main() -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use test::Bencher;
+    use crate::grid::FlutGrid;
     use tokio_test::assert_ok;
-
-    #[tokio::test]
-    async fn test_grid_init_values() {
-        let grid = FlutGrid::init(3, 3, 0);
-
-        assert_eq!(grid.cells, vec![0, 0, 0, 0, 0, 0, 0, 0, 0])
-    }
-
-    #[tokio::test]
-    async fn test_grid_init_size() {
-        let grid = FlutGrid::init(800, 600, 0);
-
-        assert_eq!(grid.size_x, 800);
-        assert_eq!(grid.size_y, 600);
-    }
-
-    #[tokio::test]
-    async fn test_grid_set() {
-        let mut grid = FlutGrid::init(3, 3, 0);
-        grid.set(1, 1, 255);
-        grid.set(2, 1, 256);
-        assert_eq!(grid.cells, vec![0, 0, 0, 0, 255, 256, 0, 0, 0])
-    }
-
-    #[tokio::test]
-    async fn test_grid_set_out_of_range() {
-        let mut grid = FlutGrid::init(3, 3, 0);
-        grid.set(1, 1, 255);
-        grid.set(3, 1, 256);
-        assert_eq!(grid.cells, vec![0, 0, 0, 0, 255, 0, 0, 0, 0])
-    }
-
-    #[tokio::test]
-    async fn test_grid_get() {
-        let mut grid = FlutGrid::init(3, 3, 0);
-        grid.set(1, 2, 222);
-        assert_eq!(grid.get(1, 2), Some(&222));
-    }
-
-    #[tokio::test]
-    async fn test_grid_get_out_of_range() {
-        let mut grid = FlutGrid::init(3, 3, 0);
-        grid.set(3, 1, 256);
-        assert_eq!(grid.get(3, 1), None);
-        assert_eq!(grid.get(1, 2), Some(&0));
-    }
-
-    #[bench]
-    fn bench_init(b: &mut Bencher) {
-        b.iter(|| FlutGrid::init(800, 600, 0 as u32))
-    }
-
-    #[bench]
-    fn bench_set(b: &mut Bencher) {
-        let mut grid = FlutGrid::init(800, 600, 0 as u32);
-        b.iter(|| {
-            let x = test::black_box(293);
-            let y = test::black_box(222);
-            let color = test::black_box(293923);
-            grid.set(x, y, color);
-        })
-    }
-
-    #[bench]
-    fn bench_get(b: &mut Bencher) {
-        let grid = FlutGrid::init(800, 600, 0 as u32);
-        b.iter(|| {
-            let x = test::black_box(293);
-            let y = test::black_box(222);
-            grid.get(x, y)
-        })
-    }
 
     #[tokio::test]
     async fn test_set_rgb_bin() {
