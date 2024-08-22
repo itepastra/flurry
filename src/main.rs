@@ -49,6 +49,7 @@ fn get_pixel(grids: &mut [grid::FlutGrid<u32>], canvas: u8, x: u16, y: u16) -> O
     }
 }
 
+#[inline]
 fn increment_counter() {
     COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 }
