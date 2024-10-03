@@ -11,7 +11,7 @@ use std::{
     time::Duration,
 };
 
-use grid::Grid;
+use grid::{FlutGrid, Grid};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
     net::TcpListener,
@@ -35,15 +35,15 @@ const GRID_LENGTH: usize = 1;
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
-fn set_pixel_rgba(grids: &mut [grid::FlutGrid<u32>], canvas: u8, x: u16, y: u16, rgb: u32) {
-    match grids.get_mut(canvas as usize) {
+fn set_pixel_rgba(grids: &[grid::FlutGrid<u32>], canvas: u8, x: u16, y: u16, rgb: u32) {
+    match grids.get(canvas as usize) {
         Some(grid) => grid.set(x, y, rgb),
         None => (),
     }
 }
 
-fn get_pixel(grids: &mut [grid::FlutGrid<u32>], canvas: u8, x: u16, y: u16) -> Option<&u32> {
-    match grids.get_mut(canvas as usize) {
+fn get_pixel(grids: &[grid::FlutGrid<u32>], canvas: u8, x: u16, y: u16) -> Option<&u32> {
+    match grids.get(canvas as usize) {
         Some(grid) => return grid.get(x, y),
         None => return None,
     }
@@ -59,7 +59,7 @@ async fn process_lock<
 >(
     reader: &mut R,
     _writer: &mut W,
-    grids: &mut [grid::FlutGrid<u32>; GRID_LENGTH],
+    grids: &[grid::FlutGrid<u32>; GRID_LENGTH],
 ) -> io::Result<()> {
     let amount = reader.read_u16_le().await?;
     let command = reader.read_u8().await?;
@@ -101,7 +101,7 @@ async fn process_lock<
                     })
                     .map(|z| z)
                     .collect::<Vec<_>>();
-                match grids.get_mut(aa[0] as usize) {
+                match grids.get(aa[0] as usize) {
                     Some(grid) => {
                         grid.set(
                             u16::from_le_bytes([aa[1], aa[2]]),
@@ -131,7 +131,7 @@ async fn process_msg<
 >(
     reader: &mut R,
     writer: &mut W,
-    grids: &mut [grid::FlutGrid<u32>; GRID_LENGTH],
+    grids: &[grid::FlutGrid<u32>; GRID_LENGTH],
 ) -> io::Result<()> {
     let fst = reader.read_u8().await;
     match fst {
@@ -189,7 +189,7 @@ async fn rgb_bin_read<R: AsyncReadExt + std::marker::Unpin>(
 
 async fn set_px_rgb_bin<R: AsyncReadExt + std::marker::Unpin>(
     reader: &mut R,
-    grids: &mut [grid::FlutGrid<u32>; GRID_LENGTH],
+    grids: &[grid::FlutGrid<u32>; GRID_LENGTH],
 ) -> io::Result<()> {
     let (canvas, x, y, r, g, b) = rgb_bin_read(reader).await?;
     let rgb = u32::from_be_bytes([r, g, b, 0xff]);
@@ -201,7 +201,7 @@ async fn set_px_rgb_bin<R: AsyncReadExt + std::marker::Unpin>(
 async fn process_socket<W, R>(
     reader: R,
     writer: W,
-    grids: &mut [grid::FlutGrid<u32>; GRID_LENGTH],
+    grids: &[grid::FlutGrid<u32>; GRID_LENGTH],
 ) -> io::Result<()>
 where
     W: AsyncWriteExt + std::marker::Unpin,
@@ -235,16 +235,13 @@ async fn listen_handle() {
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    println!("Start initialisation");
-    let grids = [grid::FlutGrid::init(800, 600, 0xff00ffff)];
-    assert_eq!(grids.len(), GRID_LENGTH);
-    let asuc = Arc::new(SyncUnsafeCell::new(grids));
     println!("created grids");
+    let grids: Arc<[FlutGrid<u32>; GRID_LENGTH]> =
+        [grid::FlutGrid::init(800, 600, 0xff00ffff)].into();
 
     let flut_listener = TcpListener::bind("0.0.0.0:7791").await?;
     println!("bound flut listener");
 
-    let img_grids = unsafe { asuc.get().as_ref().unwrap() };
     let web_listener = TcpListener::bind("0.0.0.0:7792").await?;
 
     println!("bound web listener");
@@ -252,11 +249,10 @@ async fn main() -> io::Result<()> {
 
     loop {
         let (mut socket, _) = flut_listener.accept().await?;
-        let asuc = asuc.clone();
+        let grids = grids.clone();
         let _ = tokio::spawn(async move {
-            let grids = unsafe { asuc.get().as_mut().unwrap() };
             let (reader, writer) = socket.split();
-            match process_socket(reader, writer, grids).await {
+            match process_socket(reader, writer, &grids).await {
                 Ok(()) => return Ok(()),
                 Err(err) => return Err(err),
             }

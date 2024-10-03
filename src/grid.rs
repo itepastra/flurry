@@ -1,13 +1,15 @@
+use std::cell::SyncUnsafeCell;
+
 pub trait Grid<I, V> {
     fn get(&self, x: I, y: I) -> Option<&V>;
     fn get_unchecked(&self, x: I, y: I) -> &V;
-    fn set(&mut self, x: I, y: I, value: V);
+    fn set(&self, x: I, y: I, value: V);
 }
 
 pub struct FlutGrid<T> {
     size_x: usize,
     size_y: usize,
-    cells: Vec<T>,
+    cells: SyncUnsafeCell<Vec<T>>,
 }
 
 impl<T: Clone> FlutGrid<T> {
@@ -19,7 +21,7 @@ impl<T: Clone> FlutGrid<T> {
         return FlutGrid {
             size_x,
             size_y,
-            cells: vec,
+            cells: vec.into(),
         };
     }
 }
@@ -39,20 +41,20 @@ impl<T> Grid<u16, T> for FlutGrid<T> {
     fn get(&self, x: u16, y: u16) -> Option<&T> {
         match self.index(x, y) {
             None => None,
-            Some(idx) => Some(&self.cells[idx]),
+            Some(idx) => Some(unsafe { &(*self.cells.get())[idx] }),
         }
     }
 
-    fn set(&mut self, x: u16, y: u16, value: T) {
+    fn set(&self, x: u16, y: u16, value: T) {
         match self.index(x, y) {
             None => (),
-            Some(idx) => self.cells[idx] = value,
+            Some(idx) => unsafe { (*self.cells.get())[idx] = value },
         }
     }
 
     fn get_unchecked(&self, x: u16, y: u16) -> &T {
         let idx = y as usize * self.size_x + x as usize;
-        return &self.cells[idx];
+        return unsafe { &(*self.cells.get())[idx] };
     }
 }
 
@@ -66,7 +68,7 @@ mod tests {
     async fn test_grid_init_values() {
         let grid = FlutGrid::init(3, 3, 0);
 
-        assert_eq!(grid.cells, vec![0, 0, 0, 0, 0, 0, 0, 0, 0])
+        assert_eq!(grid.cells.into_inner(), vec![0, 0, 0, 0, 0, 0, 0, 0, 0])
     }
 
     #[tokio::test]
@@ -82,7 +84,7 @@ mod tests {
         let mut grid = FlutGrid::init(3, 3, 0);
         grid.set(1, 1, 255);
         grid.set(2, 1, 256);
-        assert_eq!(grid.cells, vec![0, 0, 0, 0, 255, 256, 0, 0, 0])
+        assert_eq!(grid.cells.into_inner(), vec![0, 0, 0, 0, 255, 256, 0, 0, 0])
     }
 
     #[tokio::test]
@@ -90,7 +92,7 @@ mod tests {
         let mut grid = FlutGrid::init(3, 3, 0);
         grid.set(1, 1, 255);
         grid.set(3, 1, 256);
-        assert_eq!(grid.cells, vec![0, 0, 0, 0, 255, 0, 0, 0, 0])
+        assert_eq!(grid.cells.into_inner(), vec![0, 0, 0, 0, 255, 0, 0, 0, 0])
     }
 
     #[tokio::test]
