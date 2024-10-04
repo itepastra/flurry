@@ -190,7 +190,7 @@ where
             None => return Err(Error::from(ErrorKind::InvalidInput)),
             Some(color) => color.to_be_bytes(),
         };
-        match_parser!(parser: self.parser => parser.unparse(Response::GetPixel(x,y,[color[0], color[1], color[2]]), &mut self.writer).await);
+        match_parser!(parser: self.parser => parser.unparse(Response::GetPixel(x,y,[color[0], color[1], color[2]]), &mut self.writer).await?);
 
         self.writer.flush().await?;
         return Ok(());
@@ -208,7 +208,6 @@ where
             Color::RGBA32(r, g, b, a) => u32::from_be_bytes([r, g, b, a]),
             Color::W8(w) => u32::from_be_bytes([w, w, w, 0xff]),
         };
-        println!("setting pixel {},{} to {}", x, y, c);
         set_pixel_rgba(self.grids.as_ref(), canvas, x, y, c);
         increment_counter();
         return Ok(());
