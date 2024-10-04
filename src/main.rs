@@ -210,6 +210,7 @@ where
         };
         println!("setting pixel {},{} to {}", x, y, c);
         set_pixel_rgba(self.grids.as_ref(), canvas, x, y, c);
+        increment_counter();
         return Ok(());
     }
 
