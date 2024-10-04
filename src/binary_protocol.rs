@@ -88,7 +88,23 @@ impl MEEHHEH for BinaryParser {
 
 impl<W: AsyncWriteExt + std::marker::Unpin> Responder<W> for BinaryParser {
     async fn unparse(&self, response: Response, writer: &mut W) -> io::Result<()> {
-        todo!()
+        let help_text = format!(
+            "
+You found the binary protocol help text
+you can get this by sending ({:02X}) to the server
+To get the size of a canvas, send ({:02X}) (u8 canvas) to the server
+To set a pixel using RGB, use ({:02X}) (u8 canvas) (x as u16_le) (y as u16_le) (u8 r) (u8 g) (u8 b)
+",
+            HELP_BIN, SIZE_BIN, SET_PX_RGB_BIN
+        );
+        match response {
+            Response::Help => writer.write_all(help_text.as_bytes()).await,
+            Response::Size(x, y) => {
+                writer.write_u16_le(x).await?;
+                writer.write_u16_le(y).await
+            }
+            Response::GetPixel(_, _, c) => writer.write_all(&c).await,
+        }
     }
 }
 
