@@ -1,5 +1,7 @@
 use std::cell::SyncUnsafeCell;
 
+use crate::{Coordinate, Response};
+
 pub trait Grid<I, V> {
     fn get(&self, x: I, y: I) -> Option<&V>;
     fn get_unchecked(&self, x: I, y: I) -> &V;
@@ -24,10 +26,14 @@ impl<T: Clone> FlutGrid<T> {
             cells: vec.into(),
         };
     }
+
+    pub fn get_size(&self) -> (usize, usize) {
+        return (self.size_x, self.size_y);
+    }
 }
 
 impl<T> FlutGrid<T> {
-    fn index(&self, x: u16, y: u16) -> Option<usize> {
+    fn index(&self, x: Coordinate, y: Coordinate) -> Option<usize> {
         let x = x as usize;
         let y = y as usize;
         if x >= self.size_x || y >= self.size_y {
@@ -37,22 +43,22 @@ impl<T> FlutGrid<T> {
     }
 }
 
-impl<T> Grid<u16, T> for FlutGrid<T> {
-    fn get(&self, x: u16, y: u16) -> Option<&T> {
+impl<T> Grid<Coordinate, T> for FlutGrid<T> {
+    fn get(&self, x: Coordinate, y: Coordinate) -> Option<&T> {
         match self.index(x, y) {
             None => None,
             Some(idx) => Some(unsafe { &(*self.cells.get())[idx] }),
         }
     }
 
-    fn set(&self, x: u16, y: u16, value: T) {
+    fn set(&self, x: Coordinate, y: Coordinate, value: T) {
         match self.index(x, y) {
             None => (),
             Some(idx) => unsafe { (*self.cells.get())[idx] = value },
         }
     }
 
-    fn get_unchecked(&self, x: u16, y: u16) -> &T {
+    fn get_unchecked(&self, x: Coordinate, y: Coordinate) -> &T {
         let idx = y as usize * self.size_x + x as usize;
         return unsafe { &(*self.cells.get())[idx] };
     }
@@ -81,7 +87,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_grid_set() {
-        let mut grid = FlutGrid::init(3, 3, 0);
+        let grid = FlutGrid::init(3, 3, 0);
         grid.set(1, 1, 255);
         grid.set(2, 1, 256);
         assert_eq!(grid.cells.into_inner(), vec![0, 0, 0, 0, 255, 256, 0, 0, 0])
@@ -89,7 +95,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_grid_set_out_of_range() {
-        let mut grid = FlutGrid::init(3, 3, 0);
+        let grid = FlutGrid::init(3, 3, 0);
         grid.set(1, 1, 255);
         grid.set(3, 1, 256);
         assert_eq!(grid.cells.into_inner(), vec![0, 0, 0, 0, 255, 0, 0, 0, 0])
@@ -97,14 +103,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_grid_get() {
-        let mut grid = FlutGrid::init(3, 3, 0);
+        let grid = FlutGrid::init(3, 3, 0);
         grid.set(1, 2, 222);
         assert_eq!(grid.get(1, 2), Some(&222));
     }
 
     #[tokio::test]
     async fn test_grid_get_out_of_range() {
-        let mut grid = FlutGrid::init(3, 3, 0);
+        let grid = FlutGrid::init(3, 3, 0);
         grid.set(3, 1, 256);
         assert_eq!(grid.get(3, 1), None);
         assert_eq!(grid.get(1, 2), Some(&0));
@@ -117,7 +123,7 @@ mod tests {
 
     #[bench]
     fn bench_set(b: &mut Bencher) {
-        let mut grid = FlutGrid::init(800, 600, 0 as u32);
+        let grid = FlutGrid::init(800, 600, 0 as u32);
         b.iter(|| {
             let x = test::black_box(293);
             let y = test::black_box(222);
