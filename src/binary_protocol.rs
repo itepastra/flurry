@@ -1,27 +1,21 @@
 use std::io::{self, Error, ErrorKind};
 
-use atoi_radix10::parse_from_str;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt};
 
-use crate::{
-    increment_counter, Canvas, Color, Command, Coordinate, Parser, Protocol, Responder, Response,
-    MEEHHEH,
-};
+use crate::{Canvas, Color, Command, IOProtocol, Parser, Responder, Response};
 
 const SIZE_BIN: u8 = 115;
 const HELP_BIN: u8 = 104;
-const LOCK: u8 = 0;
 const GET_PX_BIN: u8 = 32;
 const SET_PX_RGB_BIN: u8 = 128;
 const SET_PX_RGBA_BIN: u8 = 129;
 const SET_PX_W_BIN: u8 = 130;
 
-const SET_PX_RGB_BIN_LENGTH: usize = 8;
 pub struct BinaryParser {}
 
 impl BinaryParser {
     pub fn new() -> BinaryParser {
-        return BinaryParser {};
+        BinaryParser {}
     }
 }
 
@@ -30,23 +24,23 @@ impl<R: AsyncBufRead + AsyncBufReadExt + std::marker::Unpin> Parser<R> for Binar
         let fst = reader.read_u8().await;
         match fst {
             Ok(i) => match i {
-                HELP_BIN => return Ok(Command::Help),
+                HELP_BIN => Ok(Command::Help),
                 SIZE_BIN => {
                     let canvas = reader.read_u8().await?;
-                    return Ok(Command::Size(canvas));
+                    Ok(Command::Size(canvas))
                 }
                 GET_PX_BIN => {
                     let canvas = reader.read_u8().await?;
                     let x = reader.read_u16_le().await?;
                     let y = reader.read_u16_le().await?;
-                    return Ok(Command::GetPixel(canvas, x, y));
+                    Ok(Command::GetPixel(canvas, x, y))
                 }
                 SET_PX_W_BIN => {
                     let canvas = reader.read_u8().await?;
                     let x = reader.read_u16_le().await?;
                     let y = reader.read_u16_le().await?;
                     let w = reader.read_u8().await?;
-                    return Ok(Command::SetPixel(canvas, x, y, Color::W8(w)));
+                    Ok(Command::SetPixel(canvas, x, y, Color::W8(w)))
                 }
                 SET_PX_RGB_BIN => {
                     let canvas = reader.read_u8().await?;
@@ -55,7 +49,7 @@ impl<R: AsyncBufRead + AsyncBufReadExt + std::marker::Unpin> Parser<R> for Binar
                     let r = reader.read_u8().await?;
                     let g = reader.read_u8().await?;
                     let b = reader.read_u8().await?;
-                    return Ok(Command::SetPixel(canvas, x, y, Color::RGB24(r, g, b)));
+                    Ok(Command::SetPixel(canvas, x, y, Color::RGB24(r, g, b)))
                 }
                 SET_PX_RGBA_BIN => {
                     let canvas = reader.read_u8().await?;
@@ -65,24 +59,24 @@ impl<R: AsyncBufRead + AsyncBufReadExt + std::marker::Unpin> Parser<R> for Binar
                     let g = reader.read_u8().await?;
                     let b = reader.read_u8().await?;
                     let a = reader.read_u8().await?;
-                    return Ok(Command::SetPixel(canvas, x, y, Color::RGBA32(r, g, b, a)));
+                    Ok(Command::SetPixel(canvas, x, y, Color::RGBA32(r, g, b, a)))
                 }
                 _ => {
                     eprintln!("received illegal command: {}", i);
-                    return Err(Error::from(ErrorKind::InvalidInput));
+                    Err(Error::from(ErrorKind::InvalidInput))
                 }
             },
             Err(err) => {
                 eprintln!("{}", err);
-                return Err(err);
+                Err(err)
             }
         }
     }
 }
 
-impl MEEHHEH for BinaryParser {
+impl IOProtocol for BinaryParser {
     fn change_canvas(&mut self, _canvas: Canvas) -> io::Result<()> {
-        return Err(Error::from(ErrorKind::Unsupported));
+        Err(Error::from(ErrorKind::Unsupported))
     }
 }
 
@@ -111,9 +105,7 @@ To set a pixel using RGB, use ({:02X}) (u8 canvas) (x as u16_le) (y as u16_le) (
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::grid::FlutGrid;
     use tokio::io::BufReader;
-    use tokio_test::assert_ok;
 
     #[tokio::test]
     async fn test_bin_help_parse() {

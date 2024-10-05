@@ -6,9 +6,7 @@ mod grid;
 mod text_protocol;
 
 use std::{
-    cell::SyncUnsafeCell,
     io::{self, Error, ErrorKind},
-    iter::once,
     sync::{atomic::AtomicU64, Arc},
     time::Duration,
 };
@@ -17,11 +15,13 @@ use binary_protocol::BinaryParser;
 use grid::{FlutGrid, Grid};
 use text_protocol::TextParser;
 use tokio::{
-    io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
+    io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
     net::TcpListener,
 };
 
 extern crate test;
+const GRID_LENGTH: usize = 1;
+const HOST: &str = "0.0.0.0:7791";
 
 const HELP_TEXT: &[u8] = b"Flurry is a pixelflut implementation, this means you can use commands to get and set pixels in the canvas
 SIZE returns the size of the canvas
@@ -31,7 +31,6 @@ PX {x} {y} {RGB} sets the color of the pixel at {x}, {y} to the rgb value
 PX {x} {y} {RGBA} blends the pixel at {x}, {y} with the rgb value weighted by the a
 PX {x} {y} {W} sets the color of the pixel at {x}, {y} to the grayscale value
 ";
-const GRID_LENGTH: usize = 1;
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -45,9 +44,8 @@ fn set_pixel_rgba(
     y: Coordinate,
     rgb: u32,
 ) {
-    match grids.get(canvas as usize) {
-        Some(grid) => grid.set(x, y, rgb),
-        None => (),
+    if let Some(grid) = grids.get(canvas as usize) {
+        grid.set(x, y, rgb)
     }
 }
 
@@ -58,8 +56,8 @@ fn get_pixel(
     y: Coordinate,
 ) -> Option<&u32> {
     match grids.get(canvas as usize) {
-        Some(grid) => return grid.get(x, y),
-        None => return None,
+        Some(grid) => grid.get(x, y),
+        None => None,
     }
 }
 
@@ -105,7 +103,7 @@ where
     async fn parse(&self, reader: &mut R) -> io::Result<Command>;
 }
 
-trait MEEHHEH {
+trait IOProtocol {
     fn change_canvas(&mut self, canvas: Canvas) -> io::Result<()>;
 }
 
@@ -116,12 +114,12 @@ where
     async fn unparse(&self, response: Response, writer: &mut W) -> io::Result<()>;
 }
 
-async fn listen_handle() {
+async fn listen_handle() -> io::Result<()> {
     let mut interval = tokio::time::interval(Duration::from_millis(1000));
     loop {
         interval.tick().await;
         let cnt = COUNTER.load(std::sync::atomic::Ordering::Relaxed);
-        println!("{} pixels were changed", cnt);
+        println!("{cnt} pixels were changed");
     }
 }
 
@@ -170,15 +168,16 @@ where
         match_parser!(parser: self.parser => parser.unparse(Response::Help, &mut self.writer).await?);
 
         self.writer.flush().await?;
-        return Ok(());
+        Ok(())
     }
 
     async fn size_command(&mut self, canvas: Canvas) -> io::Result<()> {
         let (x, y) = self.grids[canvas as usize].get_size();
-        match_parser!(parser: self.parser => parser.unparse(Response::Size(x as Coordinate, y as Coordinate), &mut self.writer).await?);
+        match_parser!(parser: self.parser => parser.unparse(
+            Response::Size(Coordinate::try_from(x).unwrap(), Coordinate::try_from(y).unwrap()), &mut self.writer).await?);
 
         self.writer.flush().await?;
-        return Ok(());
+        Ok(())
     }
 
     async fn get_pixel_command(
@@ -194,10 +193,10 @@ where
         match_parser!(parser: self.parser => parser.unparse(Response::GetPixel(x,y,[color[0], color[1], color[2]]), &mut self.writer).await?);
 
         self.writer.flush().await?;
-        return Ok(());
+        Ok(())
     }
 
-    async fn set_pixel_command(
+    fn set_pixel_command(
         &mut self,
         canvas: Canvas,
         x: Coordinate,
@@ -211,28 +210,28 @@ where
         };
         set_pixel_rgba(self.grids.as_ref(), canvas, x, y, c);
         increment_counter();
-        return Ok(());
+        Ok(())
     }
 
-    async fn change_canvas_command(&mut self, canvas: Canvas) -> io::Result<()> {
+    fn change_canvas_command(&mut self, canvas: Canvas) -> io::Result<()> {
         match_parser!(parser: self.parser => parser.change_canvas(canvas))
     }
 
-    async fn change_protocol(&mut self, protocol: Protocol) -> io::Result<()> {
+    fn change_protocol(&mut self, protocol: Protocol) -> io::Result<()> {
         match protocol {
             Protocol::Text => self.parser = ParserTypes::TextParser(TextParser::new(0)),
             Protocol::Binary => self.parser = ParserTypes::BinaryParser(BinaryParser::new()),
         }
-        return Ok(());
+        Ok(())
     }
 
     pub fn new(reader: R, writer: W, grids: Arc<[grid::FlutGrid<u32>]>) -> FlutClient<R, W> {
-        return FlutClient {
+        FlutClient {
             reader: BufReader::new(reader),
             writer: BufWriter::new(writer),
             grids,
             parser: ParserTypes::TextParser(TextParser::new(0)),
-        };
+        }
     }
 
     pub async fn process_socket(&mut self) -> io::Result<()> {
@@ -247,10 +246,10 @@ where
                 Ok(Command::Size(canvas)) => self.size_command(canvas).await?,
                 Ok(Command::GetPixel(canvas, x, y)) => self.get_pixel_command(canvas, x, y).await?,
                 Ok(Command::SetPixel(canvas, x, y, color)) => {
-                    self.set_pixel_command(canvas, x, y, color).await?
+                    self.set_pixel_command(canvas, x, y, color)?;
                 }
-                Ok(Command::ChangeCanvas(canvas)) => self.change_canvas_command(canvas).await?,
-                Ok(Command::ChangeProtocol(protocol)) => self.change_protocol(protocol).await?,
+                Ok(Command::ChangeCanvas(canvas)) => self.change_canvas_command(canvas)?,
+                Ok(Command::ChangeProtocol(protocol)) => self.change_protocol(protocol)?,
 
                 Err(err) if err.kind() == ErrorKind::UnexpectedEof => {
                     return Ok(());
@@ -263,35 +262,53 @@ where
     }
 }
 
-#[tokio::main]
-async fn main() -> io::Result<()> {
-    println!("created grids");
-    let grids: Arc<[FlutGrid<u32>; GRID_LENGTH]> =
-        [grid::FlutGrid::init(800, 600, 0xff00ffff)].into();
-
-    let flut_listener = TcpListener::bind("0.0.0.0:7791").await?;
-    println!("bound flut listener");
-
-    let _ = tokio::spawn(listen_handle());
-
+async fn handle_flut(
+    flut_listener: TcpListener,
+    grids: Arc<[grid::FlutGrid<u32>]>,
+) -> io::Result<()> {
+    let mut handles = Vec::new();
     loop {
         let (mut socket, _) = flut_listener.accept().await?;
         let grids = grids.clone();
-        let _ = tokio::spawn(async move {
+        handles.push(tokio::spawn(async move {
             let (reader, writer) = socket.split();
             let mut connection = FlutClient::new(reader, writer, grids);
             let resp = connection.process_socket().await;
             match resp {
-                Ok(()) => return Ok(()),
-                Err(err) => return Err(err),
+                Ok(()) => Ok(()),
+                Err(err) => Err(err),
             }
-        });
+        }));
+    }
+}
+
+#[tokio::main]
+#[allow(clippy::needless_return)]
+async fn main() {
+    println!("created grids");
+    let grids: Arc<[FlutGrid<u32>; GRID_LENGTH]> =
+        [grid::FlutGrid::init(800, 600, 0xff00ffff)].into();
+
+    let flut_listener = match TcpListener::bind(HOST).await {
+        Ok(listener) => listener,
+        Err(_) => {
+            eprintln!("Was unable to bind to {HOST}, please check if a different process is bound");
+            return;
+        }
+    };
+    println!("bound flut listener");
+
+    let handles = vec![
+        // log the amount of changed pixels each second
+        (tokio::spawn(listen_handle())),
+        // accept and handle flut connections
+        (tokio::spawn(handle_flut(flut_listener, grids))),
+    ];
+
+    for handle in handles {
+        println!("joined handle had result {:?}", handle.await)
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::grid::FlutGrid;
-    use tokio_test::assert_ok;
-}
+mod tests {}

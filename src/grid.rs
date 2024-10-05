@@ -1,9 +1,10 @@
 use std::cell::SyncUnsafeCell;
 
-use crate::{Coordinate, Response};
+use crate::Coordinate;
 
 pub trait Grid<I, V> {
     fn get(&self, x: I, y: I) -> Option<&V>;
+    #[allow(dead_code)]
     fn get_unchecked(&self, x: I, y: I) -> &V;
     fn set(&self, x: I, y: I, value: V);
 }
@@ -20,15 +21,15 @@ impl<T: Clone> FlutGrid<T> {
         for _ in 0..(size_x * size_y) {
             vec.push(value.clone());
         }
-        return FlutGrid {
+        FlutGrid {
             size_x,
             size_y,
             cells: vec.into(),
-        };
+        }
     }
 
     pub fn get_size(&self) -> (usize, usize) {
-        return (self.size_x, self.size_y);
+        (self.size_x, self.size_y)
     }
 }
 
@@ -39,16 +40,14 @@ impl<T> FlutGrid<T> {
         if x >= self.size_x || y >= self.size_y {
             return None;
         }
-        return Some((y * self.size_x) + x);
+        Some((y * self.size_x) + x)
     }
 }
 
 impl<T> Grid<Coordinate, T> for FlutGrid<T> {
     fn get(&self, x: Coordinate, y: Coordinate) -> Option<&T> {
-        match self.index(x, y) {
-            None => None,
-            Some(idx) => Some(unsafe { &(*self.cells.get())[idx] }),
-        }
+        self.index(x, y)
+            .map(|idx| unsafe { &(*self.cells.get())[idx] })
     }
 
     fn set(&self, x: Coordinate, y: Coordinate, value: T) {
@@ -60,7 +59,7 @@ impl<T> Grid<Coordinate, T> for FlutGrid<T> {
 
     fn get_unchecked(&self, x: Coordinate, y: Coordinate) -> &T {
         let idx = y as usize * self.size_x + x as usize;
-        return unsafe { &(*self.cells.get())[idx] };
+        unsafe { &(*self.cells.get())[idx] }
     }
 }
 
@@ -127,7 +126,7 @@ mod tests {
         b.iter(|| {
             let x = test::black_box(293);
             let y = test::black_box(222);
-            let color = test::black_box(293923);
+            let color = test::black_box(293_923);
             grid.set(x, y, color);
         })
     }
