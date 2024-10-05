@@ -61,7 +61,6 @@ impl TextParser {
 
         let _command = split.next().ok_or(Error::from(ErrorKind::InvalidInput))?;
         let canvas = split.next().ok_or(Error::from(ErrorKind::InvalidInput))?;
-        println!("{:?}", canvas);
         if let Ok(canvas) = canvas.parse() {
             return Ok(Command::ChangeCanvas(canvas));
         } else {
@@ -85,7 +84,6 @@ impl<R: AsyncBufRead + AsyncBufReadExt + std::marker::Unpin> Parser<R> for TextP
     async fn parse(&self, reader: &mut R) -> io::Result<Command> {
         let mut line = "".to_string();
         if let Ok(_) = reader.read_line(&mut line).await {
-            println!("{:?}", line);
             if line.starts_with("HELP") {
                 return Ok(Command::Help);
             } else if line.starts_with("SIZE") {
