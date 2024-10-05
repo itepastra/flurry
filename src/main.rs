@@ -1,7 +1,9 @@
 #![feature(test)]
 #![feature(sync_unsafe_cell)]
 
+mod binary_protocol;
 mod grid;
+mod text_protocol;
 
 use std::{
     cell::SyncUnsafeCell,
@@ -11,39 +13,51 @@ use std::{
     time::Duration,
 };
 
-use grid::Grid;
+use binary_protocol::BinaryParser;
+use grid::{FlutGrid, Grid};
+use text_protocol::TextParser;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
+    io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
     net::TcpListener,
 };
 
 extern crate test;
 
-const HELP_TEXT: u8 = 72;
-const SIZE_TEXT: u8 = 83;
-const PX_TEXT: u8 = 80;
-const SIZE_BIN: u8 = 115;
-const HELP_BIN: u8 = 104;
-const LOCK: u8 = 0;
-const GET_PX_BIN: u8 = 32;
-const SET_PX_RGB_BIN: u8 = 128;
-const SET_PX_RGBA_BIN: u8 = 129;
-const SET_PX_W_BIN: u8 = 130;
-
-const SET_PX_RGB_BIN_LENGTH: usize = 8;
+const HELP_TEXT: &[u8] = b"Flurry is a pixelflut implementation, this means you can use commands to get and set pixels in the canvas
+SIZE returns the size of the canvas
+PX {x} {y} returns the color of the pixel at {x}, {y}
+If you include a color in hex format you set a pixel instead
+PX {x} {y} {RGB} sets the color of the pixel at {x}, {y} to the rgb value
+PX {x} {y} {RGBA} blends the pixel at {x}, {y} with the rgb value weighted by the a
+PX {x} {y} {W} sets the color of the pixel at {x}, {y} to the grayscale value
+";
 const GRID_LENGTH: usize = 1;
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
-fn set_pixel_rgba(grids: &mut [grid::FlutGrid<u32>], canvas: u8, x: u16, y: u16, rgb: u32) {
-    match grids.get_mut(canvas as usize) {
+type Canvas = u8;
+type Coordinate = u16;
+
+fn set_pixel_rgba(
+    grids: &[grid::FlutGrid<u32>],
+    canvas: Canvas,
+    x: Coordinate,
+    y: Coordinate,
+    rgb: u32,
+) {
+    match grids.get(canvas as usize) {
         Some(grid) => grid.set(x, y, rgb),
         None => (),
     }
 }
 
-fn get_pixel(grids: &mut [grid::FlutGrid<u32>], canvas: u8, x: u16, y: u16) -> Option<&u32> {
-    match grids.get_mut(canvas as usize) {
+fn get_pixel(
+    grids: &[grid::FlutGrid<u32>],
+    canvas: Canvas,
+    x: Coordinate,
+    y: Coordinate,
+) -> Option<&u32> {
+    match grids.get(canvas as usize) {
         Some(grid) => return grid.get(x, y),
         None => return None,
     }
@@ -54,175 +68,52 @@ fn increment_counter() {
     COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 }
 
-async fn process_lock<
-    R: AsyncReadExt + std::marker::Unpin,
-    W: AsyncWriteExt + std::marker::Unpin,
->(
-    reader: &mut R,
-    _writer: &mut W,
-    grids: &mut [grid::FlutGrid<u32>; GRID_LENGTH],
-) -> io::Result<()> {
-    let amount = reader.read_u16_le().await?;
-    let command = reader.read_u8().await?;
-    let lockmask = reader.read_u16().await?;
-    let mut buf = vec![0; lockmask.count_ones() as usize];
-    let statics = reader.read_exact(&mut buf).await?;
-
-    match command {
-        GET_PX_BIN => todo!("GET pixel lock"),
-        SET_PX_RGB_BIN => {
-            let per = SET_PX_RGB_BIN_LENGTH - statics;
-            let mut j = 0;
-            let mut a;
-            let static_buf: Vec<Option<u8>> = (0..SET_PX_RGB_BIN_LENGTH)
-                .map(|i| match lockmask >> (15 - i) & 1 {
-                    1 => {
-                        let b = Some(buf[j]);
-
-                        j += 1;
-                        return b;
-                    }
-                    0 => None,
-                    k => panic!("WTF, how is {} not 0 or 1", k),
-                })
-                .collect();
-            let mut mod_buf: Vec<u8> = vec![0; per];
-            for _ in 0..amount {
-                a = 0;
-                let _ = reader.read_exact(&mut mod_buf).await?;
-                let aa = static_buf
-                    .iter()
-                    .map(|x| *match x {
-                        Some(val) => val,
-                        None => {
-                            let b = mod_buf[a];
-                            a += 1;
-                            return b;
-                        }
-                    })
-                    .map(|z| z)
-                    .collect::<Vec<_>>();
-                match grids.get_mut(aa[0] as usize) {
-                    Some(grid) => {
-                        grid.set(
-                            u16::from_le_bytes([aa[1], aa[2]]),
-                            u16::from_le_bytes([aa[3], aa[4]]),
-                            u32::from_be_bytes([aa[5], aa[6], aa[7], 0xff]),
-                        );
-                        increment_counter()
-                    }
-                    None => (),
-                }
-            }
-        }
-        SET_PX_RGBA_BIN => todo!("Set rgba lock"),
-        SET_PX_W_BIN => todo!("set w lock"),
-        _ => {
-            eprintln!("not a cmd");
-            return Err(Error::from(ErrorKind::InvalidInput));
-        }
-    }
-
-    return Ok(());
+#[derive(Debug, PartialEq)]
+enum Color {
+    RGB24(u8, u8, u8),
+    RGBA32(u8, u8, u8, u8),
+    W8(u8),
 }
 
-async fn process_msg<
-    R: AsyncReadExt + std::marker::Unpin,
-    W: AsyncWriteExt + std::marker::Unpin,
->(
-    reader: &mut R,
-    writer: &mut W,
-    grids: &mut [grid::FlutGrid<u32>; GRID_LENGTH],
-) -> io::Result<()> {
-    let fst = reader.read_u8().await;
-    match fst {
-        Ok(i) => match i {
-            HELP_TEXT => todo!("HELP command check and message"),
-            SIZE_TEXT => todo!("SIZE command check and message"),
-            PX_TEXT => todo!("PX command handling"),
-            HELP_BIN => todo!("HELP command message"),
-            SIZE_BIN => todo!("SIZE command check and message"),
-            LOCK => process_lock(reader, writer, grids).await,
-            GET_PX_BIN => {
-                let canvas = reader.read_u8().await?;
-                let x = reader.read_u16_le().await?;
-                let y = reader.read_u16_le().await?;
-                match get_pixel(grids, canvas, x, y) {
-                    None => (),
-                    Some(color) => {
-                        let towrite = &once(GET_PX_BIN)
-                            .chain(once(canvas))
-                            .chain(x.to_le_bytes())
-                            .chain(y.to_le_bytes())
-                            .chain(color.to_be_bytes().into_iter().take(3))
-                            .collect::<Vec<_>>();
-                        writer.write_all(towrite).await?;
-                    }
-                }
-                return Ok(());
-            }
-            SET_PX_RGB_BIN => set_px_rgb_bin(reader, grids).await,
-            SET_PX_RGBA_BIN => todo!("SET rgba"),
-            SET_PX_W_BIN => todo!("SET w"),
-            _ => {
-                eprintln!("received illegal command: {}", i);
-                return Err(Error::from(ErrorKind::InvalidInput));
-            }
-        },
-        Err(err) => {
-            eprintln!("{}", err);
-            return Err(err);
-        }
-    }
+#[derive(Debug, PartialEq)]
+enum Protocol {
+    Text,
+    Binary,
 }
 
-async fn rgb_bin_read<R: AsyncReadExt + std::marker::Unpin>(
-    reader: &mut R,
-) -> io::Result<(u8, u16, u16, u8, u8, u8)> {
-    let canvas = reader.read_u8().await?;
-    let x = reader.read_u16_le().await?;
-    let y = reader.read_u16_le().await?;
-    let r = reader.read_u8().await?;
-    let g = reader.read_u8().await?;
-    let b = reader.read_u8().await?;
-    return Ok((canvas, x, y, r, g, b));
+#[derive(Debug, PartialEq)]
+enum Command {
+    Help,
+    Size(Canvas),
+    GetPixel(Canvas, Coordinate, Coordinate),
+    SetPixel(Canvas, Coordinate, Coordinate, Color),
+    ChangeCanvas(Canvas),
+    ChangeProtocol(Protocol),
 }
 
-async fn set_px_rgb_bin<R: AsyncReadExt + std::marker::Unpin>(
-    reader: &mut R,
-    grids: &mut [grid::FlutGrid<u32>; GRID_LENGTH],
-) -> io::Result<()> {
-    let (canvas, x, y, r, g, b) = rgb_bin_read(reader).await?;
-    let rgb = u32::from_be_bytes([r, g, b, 0xff]);
-    set_pixel_rgba(grids, canvas, x, y, rgb);
-    increment_counter();
-    return Ok(());
+#[derive(Debug, PartialEq)]
+enum Response {
+    Help,
+    Size(Coordinate, Coordinate),
+    GetPixel(Coordinate, Coordinate, [u8; 3]),
 }
 
-async fn process_socket<W, R>(
-    reader: R,
-    writer: W,
-    grids: &mut [grid::FlutGrid<u32>; GRID_LENGTH],
-) -> io::Result<()>
+trait Parser<R>
+where
+    R: std::marker::Unpin + tokio::io::AsyncBufRead,
+{
+    async fn parse(&self, reader: &mut R) -> io::Result<Command>;
+}
+
+trait MEEHHEH {
+    fn change_canvas(&mut self, canvas: Canvas) -> io::Result<()>;
+}
+
+trait Responder<W>
 where
     W: AsyncWriteExt + std::marker::Unpin,
-    R: AsyncReadExt + std::marker::Unpin,
 {
-    let mut reader = BufReader::new(reader);
-    let mut writer = BufWriter::new(writer);
-    loop {
-        match process_msg(&mut reader, &mut writer, grids).await {
-            Ok(()) => {}
-            Err(err) if err.kind() == ErrorKind::UnexpectedEof => {
-                let _ = writer.flush().await;
-                return Ok(());
-            }
-            Err(e) => {
-                eprintln!("error with kind {}", e.kind());
-                return Err(e);
-            }
-        }
-    }
+    async fn unparse(&self, response: Response, writer: &mut W) -> io::Result<()>;
 }
 
 async fn listen_handle() {
@@ -234,30 +125,163 @@ async fn listen_handle() {
     }
 }
 
+macro_rules! build_parser_type_enum {
+    ($($name:ident: $t:ty,)*) => {
+
+        enum ParserTypes {
+            $($name($t),)*
+        }
+
+        macro_rules! match_parser {
+            ($pident:ident: $parser:expr => $f:expr) => (
+                match &mut $parser {
+                    $(
+                        ParserTypes::$name($pident) => $f,
+                    )*
+                }
+            )
+        }
+    };
+}
+
+build_parser_type_enum! {
+    TextParser: TextParser,
+    BinaryParser: BinaryParser,
+}
+
+struct FlutClient<R, W>
+where
+    R: AsyncReadExt + std::marker::Unpin,
+    W: AsyncWriteExt + std::marker::Unpin,
+{
+    reader: BufReader<R>,
+    writer: BufWriter<W>,
+    grids: Arc<[FlutGrid<u32>]>,
+    parser: ParserTypes,
+}
+
+impl<R, W> FlutClient<R, W>
+where
+    R: AsyncReadExt + std::marker::Unpin,
+    W: AsyncWriteExt + std::marker::Unpin,
+{
+    async fn help_command(&mut self) -> io::Result<()> {
+        println!("HELP wanted");
+        match_parser!(parser: self.parser => parser.unparse(Response::Help, &mut self.writer).await?);
+
+        self.writer.flush().await?;
+        return Ok(());
+    }
+
+    async fn size_command(&mut self, canvas: Canvas) -> io::Result<()> {
+        let (x, y) = self.grids[canvas as usize].get_size();
+        match_parser!(parser: self.parser => parser.unparse(Response::Size(x as Coordinate, y as Coordinate), &mut self.writer).await?);
+
+        self.writer.flush().await?;
+        return Ok(());
+    }
+
+    async fn get_pixel_command(
+        &mut self,
+        canvas: Canvas,
+        x: Coordinate,
+        y: Coordinate,
+    ) -> io::Result<()> {
+        let color = match get_pixel(&self.grids, canvas, x, y) {
+            None => return Err(Error::from(ErrorKind::InvalidInput)),
+            Some(color) => color.to_be_bytes(),
+        };
+        match_parser!(parser: self.parser => parser.unparse(Response::GetPixel(x,y,[color[0], color[1], color[2]]), &mut self.writer).await?);
+
+        self.writer.flush().await?;
+        return Ok(());
+    }
+
+    async fn set_pixel_command(
+        &mut self,
+        canvas: Canvas,
+        x: Coordinate,
+        y: Coordinate,
+        color: Color,
+    ) -> io::Result<()> {
+        let c: u32 = match color {
+            Color::RGB24(r, g, b) => u32::from_be_bytes([r, g, b, 0xff]),
+            Color::RGBA32(r, g, b, a) => u32::from_be_bytes([r, g, b, a]),
+            Color::W8(w) => u32::from_be_bytes([w, w, w, 0xff]),
+        };
+        set_pixel_rgba(self.grids.as_ref(), canvas, x, y, c);
+        increment_counter();
+        return Ok(());
+    }
+
+    async fn change_canvas_command(&mut self, canvas: Canvas) -> io::Result<()> {
+        match_parser!(parser: self.parser => parser.change_canvas(canvas))
+    }
+
+    async fn change_protocol(&mut self, protocol: Protocol) -> io::Result<()> {
+        match protocol {
+            Protocol::Text => self.parser = ParserTypes::TextParser(TextParser::new(0)),
+            Protocol::Binary => self.parser = ParserTypes::BinaryParser(BinaryParser::new()),
+        }
+        return Ok(());
+    }
+
+    pub fn new(reader: R, writer: W, grids: Arc<[grid::FlutGrid<u32>]>) -> FlutClient<R, W> {
+        return FlutClient {
+            reader: BufReader::new(reader),
+            writer: BufWriter::new(writer),
+            grids,
+            parser: ParserTypes::TextParser(TextParser::new(0)),
+        };
+    }
+
+    pub async fn process_socket(&mut self) -> io::Result<()> {
+        loop {
+            let parsed = match &self.parser {
+                ParserTypes::TextParser(parser) => parser.parse(&mut self.reader).await,
+                ParserTypes::BinaryParser(parser) => parser.parse(&mut self.reader).await,
+            };
+
+            match parsed {
+                Ok(Command::Help) => self.help_command().await?,
+                Ok(Command::Size(canvas)) => self.size_command(canvas).await?,
+                Ok(Command::GetPixel(canvas, x, y)) => self.get_pixel_command(canvas, x, y).await?,
+                Ok(Command::SetPixel(canvas, x, y, color)) => {
+                    self.set_pixel_command(canvas, x, y, color).await?
+                }
+                Ok(Command::ChangeCanvas(canvas)) => self.change_canvas_command(canvas).await?,
+                Ok(Command::ChangeProtocol(protocol)) => self.change_protocol(protocol).await?,
+
+                Err(err) if err.kind() == ErrorKind::UnexpectedEof => {
+                    return Ok(());
+                }
+                Err(e) => {
+                    return Err(e);
+                }
+            }
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    println!("Start initialisation");
-    let grids = [grid::FlutGrid::init(800, 600, 0xff00ffff)];
-    assert_eq!(grids.len(), GRID_LENGTH);
-    let asuc = Arc::new(SyncUnsafeCell::new(grids));
     println!("created grids");
+    let grids: Arc<[FlutGrid<u32>; GRID_LENGTH]> =
+        [grid::FlutGrid::init(800, 600, 0xff00ffff)].into();
 
     let flut_listener = TcpListener::bind("0.0.0.0:7791").await?;
     println!("bound flut listener");
 
-    let img_grids = unsafe { asuc.get().as_ref().unwrap() };
-    let web_listener = TcpListener::bind("0.0.0.0:7792").await?;
-
-    println!("bound web listener");
     let _ = tokio::spawn(listen_handle());
 
     loop {
         let (mut socket, _) = flut_listener.accept().await?;
-        let asuc = asuc.clone();
+        let grids = grids.clone();
         let _ = tokio::spawn(async move {
-            let grids = unsafe { asuc.get().as_mut().unwrap() };
             let (reader, writer) = socket.split();
-            match process_socket(reader, writer, grids).await {
+            let mut connection = FlutClient::new(reader, writer, grids);
+            let resp = connection.process_socket().await;
+            match resp {
                 Ok(()) => return Ok(()),
                 Err(err) => return Err(err),
             }
@@ -270,64 +294,4 @@ mod tests {
     use super::*;
     use crate::grid::FlutGrid;
     use tokio_test::assert_ok;
-
-    #[tokio::test]
-    async fn test_set_rgb_bin() {
-        let mut grids = [FlutGrid::init(800, 600, 0xFF00FF)];
-        let reader = tokio_test::io::Builder::new()
-            .read(&[SET_PX_RGB_BIN, 0, 16, 0, 32, 0, 0, 0, 0])
-            .read(&[SET_PX_RGB_BIN, 0, 16, 0, 33, 0, 2, 3, 5])
-            .build();
-        let writer = tokio_test::io::Builder::new().build();
-        assert_ok!(process_socket(reader, writer, &mut grids).await);
-        assert_eq!(grids[0].get(16, 32), Some(&0x000000ff));
-        assert_eq!(grids[0].get(16, 33), Some(&0x020305ff));
-    }
-
-    #[tokio::test]
-    async fn test_set_rgb_lock() {
-        let mut grids = [FlutGrid::init(800, 600, 0xFF00FF)];
-        let reader = tokio_test::io::Builder::new()
-            .read(&[
-                LOCK,
-                3,
-                0,
-                SET_PX_RGB_BIN,
-                0b1011_1110,
-                0b0000_0000,
-                0,
-                0,
-                0,
-                0,
-                2,
-                3,
-            ])
-            .read(&[100, 4])
-            .read(&[101, 5])
-            .read(&[102, 6])
-            .build();
-        let writer = tokio_test::io::Builder::new().build();
-        assert_ok!(process_socket(reader, writer, &mut grids).await);
-
-        assert_eq!(grids[0].get(100, 0), Some(&0x020304ff));
-        assert_eq!(grids[0].get(101, 0), Some(&0x020305ff));
-        assert_eq!(grids[0].get(102, 0), Some(&0x020306ff));
-    }
-
-    #[tokio::test]
-    async fn test_get_rgb_bin() {
-        let mut grids = [FlutGrid::init(800, 600, 0xFF00F0FF)];
-        let reader = tokio_test::io::Builder::new()
-            .read(&[GET_PX_BIN, 0, 15, 0, 21, 0])
-            .read(&[GET_PX_BIN, 0, 16, 0, 21, 0])
-            .read(&[GET_PX_BIN, 0, 17, 0, 21, 0])
-            .build();
-        let writer = tokio_test::io::Builder::new()
-            .write(&[GET_PX_BIN, 0, 15, 0, 21, 0, 0xff, 0x00, 0xf0])
-            .write(&[GET_PX_BIN, 0, 16, 0, 21, 0, 0xff, 0x00, 0xf0])
-            .write(&[GET_PX_BIN, 0, 17, 0, 21, 0, 0xff, 0x00, 0xf0])
-            .build();
-        assert_ok!(process_socket(reader, writer, &mut grids).await);
-        assert_eq!(grids[0].get(15, 21), Some(&0xff00f0ff));
-    }
 }
