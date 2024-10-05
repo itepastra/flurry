@@ -1,22 +1,80 @@
-name: Rust
+name: CI
 
 on:
   push:
-    branches: [ "main" ]
   pull_request:
-    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 env:
-  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -Dwarnings
 
 jobs:
-  build:
+  pre_ci:
+    uses: dtolnay/.github/.github/workflows/pre_ci.yml@master
 
-    runs-on: ubuntu-latest
-
+  test:
+    name: ${{matrix.name || format('Rust {0}', matrix.rust)}}
+    needs: pre_ci
+    if: needs.pre_ci.outputs.continue
+    runs-on: ${{matrix.os}}-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: [nightly]
+        os: [ubuntu]
+        include:
+          - name: macOS
+            os: macos
+            rust: nightly
+          - name: Windows (gnu)
+            os: windows
+            rust: nightly-x86_64-pc-windows-gnu
+          - name: Windows (msvc)
+            os: windows
+            rust: nightly-x86_64-pc-windows-msvc
+    timeout-minutes: 45
     steps:
-    - uses: actions/checkout@v4
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{matrix.rust}}
+      - name: Enable type layout randomization
+        run: echo RUSTFLAGS=${RUSTFLAGS}\ -Zrandomize-layout\ --cfg=exhaustive >> $GITHUB_ENV
+        if: matrix.rust == 'nightly'
+      - run: cargo check --locked
+      - run: cargo update
+      - run: cargo check
+      - run: cargo test
+        if: matrix.os == 'ubuntu' && matrix.rust == 'nightly'
+      - run: cargo run -- expand --manifest-path tests/Cargo.toml > expand.rs && diff tests/lib.expand.rs expand.rs
+        if: startsWith(matrix.rust, 'nightly')
+      - uses: actions/upload-artifact@v4
+        if: matrix.os == 'ubuntu' && matrix.rust == 'nightly' && always()
+        with:
+          name: Cargo.lock
+          path: Cargo.lock
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@clippy
+      - run: cargo clippy --tests -- -Dclippy::all -Dclippy::pedantic
+
+  outdated:
+    name: Outdated
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/install@cargo-outdated
+      - run: cargo update
+      - run: cargo outdated --workspace --exit-code 1
