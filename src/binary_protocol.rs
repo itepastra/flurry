@@ -23,7 +23,7 @@ impl<R: AsyncBufRead + AsyncBufReadExt + std::marker::Unpin> Parser<R> for Binar
     async fn parse(&self, reader: &mut R) -> io::Result<Command> {
         let fst = reader.read_u8().await;
         match fst {
-            Ok(i) => match i {
+            Ok(command) => match command {
                 HELP_BIN => Ok(Command::Help),
                 SIZE_BIN => {
                     let canvas = reader.read_u8().await?;
@@ -31,43 +31,58 @@ impl<R: AsyncBufRead + AsyncBufReadExt + std::marker::Unpin> Parser<R> for Binar
                 }
                 GET_PX_BIN => {
                     let canvas = reader.read_u8().await?;
-                    let x = reader.read_u16_le().await?;
-                    let y = reader.read_u16_le().await?;
-                    Ok(Command::GetPixel(canvas, x, y))
+                    let horizontal = reader.read_u16_le().await?;
+                    let vertical = reader.read_u16_le().await?;
+                    Ok(Command::GetPixel(canvas, horizontal, vertical))
                 }
                 SET_PX_W_BIN => {
                     let canvas = reader.read_u8().await?;
-                    let x = reader.read_u16_le().await?;
-                    let y = reader.read_u16_le().await?;
-                    let w = reader.read_u8().await?;
-                    Ok(Command::SetPixel(canvas, x, y, Color::W8(w)))
+                    let horizontal = reader.read_u16_le().await?;
+                    let vertical = reader.read_u16_le().await?;
+                    let white = reader.read_u8().await?;
+                    Ok(Command::SetPixel(
+                        canvas,
+                        horizontal,
+                        vertical,
+                        Color::W8(white),
+                    ))
                 }
                 SET_PX_RGB_BIN => {
                     let canvas = reader.read_u8().await?;
-                    let x = reader.read_u16_le().await?;
-                    let y = reader.read_u16_le().await?;
-                    let r = reader.read_u8().await?;
-                    let g = reader.read_u8().await?;
-                    let b = reader.read_u8().await?;
-                    Ok(Command::SetPixel(canvas, x, y, Color::RGB24(r, g, b)))
+                    let horizontal = reader.read_u16_le().await?;
+                    let vertical = reader.read_u16_le().await?;
+                    let red = reader.read_u8().await?;
+                    let green = reader.read_u8().await?;
+                    let blue = reader.read_u8().await?;
+                    Ok(Command::SetPixel(
+                        canvas,
+                        horizontal,
+                        vertical,
+                        Color::RGB24(red, green, blue),
+                    ))
                 }
                 SET_PX_RGBA_BIN => {
                     let canvas = reader.read_u8().await?;
-                    let x = reader.read_u16_le().await?;
-                    let y = reader.read_u16_le().await?;
-                    let r = reader.read_u8().await?;
-                    let g = reader.read_u8().await?;
-                    let b = reader.read_u8().await?;
-                    let a = reader.read_u8().await?;
-                    Ok(Command::SetPixel(canvas, x, y, Color::RGBA32(r, g, b, a)))
+                    let horizontal = reader.read_u16_le().await?;
+                    let vertical = reader.read_u16_le().await?;
+                    let red = reader.read_u8().await?;
+                    let green = reader.read_u8().await?;
+                    let blue = reader.read_u8().await?;
+                    let alpha = reader.read_u8().await?;
+                    Ok(Command::SetPixel(
+                        canvas,
+                        horizontal,
+                        vertical,
+                        Color::RGBA32(red, green, blue, alpha),
+                    ))
                 }
                 _ => {
-                    eprintln!("received illegal command: {}", i);
+                    eprintln!("received illegal command: {command}");
                     Err(Error::from(ErrorKind::InvalidInput))
                 }
             },
             Err(err) => {
-                eprintln!("{}", err);
+                eprintln!("{err}");
                 Err(err)
             }
         }
@@ -85,11 +100,10 @@ impl<W: AsyncWriteExt + std::marker::Unpin> Responder<W> for BinaryParser {
         let help_text = format!(
             "
 You found the binary protocol help text
-you can get this by sending ({:02X}) to the server
-To get the size of a canvas, send ({:02X}) (u8 canvas) to the server
-To set a pixel using RGB, use ({:02X}) (u8 canvas) (x as u16_le) (y as u16_le) (u8 r) (u8 g) (u8 b)
+you can get this by sending ({HELP_BIN:02X}) to the server
+To get the size of a canvas, send ({SIZE_BIN:02X}) (u8 canvas) to the server
+To set a pixel using RGB, use ({SET_PX_RGB_BIN:02X}) (u8 canvas) (x as u16_le) (y as u16_le) (u8 r) (u8 g) (u8 b)
 ",
-            HELP_BIN, SIZE_BIN, SET_PX_RGB_BIN
         );
         match response {
             Response::Help => writer.write_all(help_text.as_bytes()).await,
@@ -103,6 +117,7 @@ To set a pixel using RGB, use ({:02X}) (u8 canvas) (x as u16_le) (y as u16_le) (
 }
 
 #[cfg(test)]
+#[allow(clippy::needless_return)]
 mod tests {
     use super::*;
     use tokio::io::BufReader;
@@ -113,7 +128,7 @@ mod tests {
         let reader = tokio_test::io::Builder::new().read(&[HELP_BIN]).build();
         let mut bufreader = BufReader::new(reader);
         let thingy = parser.parse(&mut bufreader).await;
-        assert_eq!(thingy.unwrap(), Command::Help)
+        assert_eq!(thingy.unwrap(), Command::Help);
     }
 
     #[tokio::test]
@@ -122,7 +137,7 @@ mod tests {
         let reader = tokio_test::io::Builder::new().read(&[SIZE_BIN, 3]).build();
         let mut bufreader = BufReader::new(reader);
         let thingy = parser.parse(&mut bufreader).await;
-        assert_eq!(thingy.unwrap(), Command::Size(3))
+        assert_eq!(thingy.unwrap(), Command::Size(3));
     }
 
     #[tokio::test]
@@ -136,7 +151,7 @@ mod tests {
         assert_eq!(
             thingy.unwrap(),
             Command::SetPixel(1, 0x4269, 0x6942, Color::W8(0x82))
-        )
+        );
     }
 
     #[tokio::test]
@@ -160,7 +175,7 @@ mod tests {
         assert_eq!(
             thingy.unwrap(),
             Command::SetPixel(1, 0x4269, 0x6942, Color::RGB24(0x82, 0x00, 0xff))
-        )
+        );
     }
 
     #[tokio::test]
@@ -185,7 +200,7 @@ mod tests {
         assert_eq!(
             thingy.unwrap(),
             Command::SetPixel(1, 0x4269, 0x6942, Color::RGBA32(0x82, 0x00, 0xff, 0xa0))
-        )
+        );
     }
 
     #[tokio::test]
@@ -196,7 +211,7 @@ mod tests {
             .build();
         let mut bufreader = BufReader::new(reader);
         let thingy = parser.parse(&mut bufreader).await;
-        assert_eq!(thingy.unwrap(), Command::GetPixel(3, 0x4269, 0x6942))
+        assert_eq!(thingy.unwrap(), Command::GetPixel(3, 0x4269, 0x6942));
     }
 
     #[tokio::test]

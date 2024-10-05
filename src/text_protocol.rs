@@ -55,7 +55,7 @@ impl TextParser {
             Err(Error::from(ErrorKind::InvalidInput))
         }
     }
-    fn parse_canvas(&self, line: &str) -> io::Result<Command> {
+    fn parse_canvas(line: &str) -> io::Result<Command> {
         let mut split = line.trim().split(' ');
 
         let _command = split.next().ok_or(Error::from(ErrorKind::InvalidInput))?;
@@ -66,7 +66,7 @@ impl TextParser {
             Err(Error::from(ErrorKind::InvalidInput))
         }
     }
-    fn parse_protocol(&self, line: &str) -> io::Result<Command> {
+    fn parse_protocol(line: &str) -> io::Result<Command> {
         let mut split = line.trim().split(' ');
 
         let _command = split.next().ok_or(Error::from(ErrorKind::InvalidInput))?;
@@ -81,7 +81,7 @@ impl TextParser {
 
 impl<R: AsyncBufRead + AsyncBufReadExt + std::marker::Unpin> Parser<R> for TextParser {
     async fn parse(&self, reader: &mut R) -> io::Result<Command> {
-        let mut line = "".to_string();
+        let mut line = String::new();
         if reader.read_line(&mut line).await.is_ok() {
             if line.starts_with("HELP") {
                 return Ok(Command::Help);
@@ -90,9 +90,9 @@ impl<R: AsyncBufRead + AsyncBufReadExt + std::marker::Unpin> Parser<R> for TextP
             } else if line.starts_with("PX ") {
                 return self.parse_pixel(&line);
             } else if line.starts_with("CANVAS ") {
-                return self.parse_canvas(&line);
+                return TextParser::parse_canvas(&line);
             } else if line.starts_with("PROTOCOL ") {
-                return self.parse_protocol(&line);
+                return TextParser::parse_protocol(&line);
             }
         }
         Err(Error::from(ErrorKind::InvalidInput))
@@ -114,14 +114,10 @@ impl<W: AsyncWriteExt + std::marker::Unpin> Responder<W> for TextParser {
     async fn unparse(&self, response: Response, writer: &mut W) -> io::Result<()> {
         match response {
             Response::Help => writer.write_all(HELP_TEXT).await,
-            Response::Size(x, y) => {
-                writer
-                    .write_all(format!("SIZE {} {}\n", x, y).as_bytes())
-                    .await
-            }
+            Response::Size(x, y) => writer.write_all(format!("SIZE {x} {y}\n").as_bytes()).await,
             Response::GetPixel(x, y, color) => {
                 writer
-                    .write_all(format!("PX {} {} {}\n", x, y, hex::encode_upper(color)).as_bytes())
+                    .write_all(format!("PX {x} {y} {}\n", hex::encode_upper(color)).as_bytes())
                     .await
             }
         }
@@ -129,6 +125,7 @@ impl<W: AsyncWriteExt + std::marker::Unpin> Responder<W> for TextParser {
 }
 
 #[cfg(test)]
+#[allow(clippy::needless_return)]
 mod tests {
     use super::*;
     use tokio::io::BufReader;

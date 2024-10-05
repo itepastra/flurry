@@ -12,7 +12,7 @@ use std::{
 };
 
 use binary_protocol::BinaryParser;
-use grid::{FlutGrid, Grid};
+use grid::{Flut, Grid};
 use text_protocol::TextParser;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
@@ -38,19 +38,19 @@ type Canvas = u8;
 type Coordinate = u16;
 
 fn set_pixel_rgba(
-    grids: &[grid::FlutGrid<u32>],
+    grids: &[grid::Flut<u32>],
     canvas: Canvas,
     x: Coordinate,
     y: Coordinate,
     rgb: u32,
 ) {
     if let Some(grid) = grids.get(canvas as usize) {
-        grid.set(x, y, rgb)
+        grid.set(x, y, rgb);
     }
 }
 
 fn get_pixel(
-    grids: &[grid::FlutGrid<u32>],
+    grids: &[grid::Flut<u32>],
     canvas: Canvas,
     x: Coordinate,
     y: Coordinate,
@@ -154,7 +154,7 @@ where
 {
     reader: BufReader<R>,
     writer: BufWriter<W>,
-    grids: Arc<[FlutGrid<u32>]>,
+    grids: Arc<[Flut<u32>]>,
     parser: ParserTypes,
 }
 
@@ -196,36 +196,30 @@ where
         Ok(())
     }
 
-    fn set_pixel_command(
-        &mut self,
-        canvas: Canvas,
-        x: Coordinate,
-        y: Coordinate,
-        color: Color,
-    ) -> io::Result<()> {
+    fn set_pixel_command(&mut self, canvas: Canvas, x: Coordinate, y: Coordinate, color: &Color) {
         let c: u32 = match color {
-            Color::RGB24(r, g, b) => u32::from_be_bytes([r, g, b, 0xff]),
-            Color::RGBA32(r, g, b, a) => u32::from_be_bytes([r, g, b, a]),
-            Color::W8(w) => u32::from_be_bytes([w, w, w, 0xff]),
+            Color::RGB24(red, green, blue) => u32::from_be_bytes([*red, *green, *blue, 0xff]),
+            Color::RGBA32(red, green, blue, alpha) => {
+                u32::from_be_bytes([*red, *green, *blue, *alpha])
+            }
+            Color::W8(white) => u32::from_be_bytes([*white, *white, *white, 0xff]),
         };
         set_pixel_rgba(self.grids.as_ref(), canvas, x, y, c);
         increment_counter();
-        Ok(())
     }
 
     fn change_canvas_command(&mut self, canvas: Canvas) -> io::Result<()> {
         match_parser!(parser: self.parser => parser.change_canvas(canvas))
     }
 
-    fn change_protocol(&mut self, protocol: Protocol) -> io::Result<()> {
+    fn change_protocol(&mut self, protocol: &Protocol) {
         match protocol {
             Protocol::Text => self.parser = ParserTypes::TextParser(TextParser::new(0)),
             Protocol::Binary => self.parser = ParserTypes::BinaryParser(BinaryParser::new()),
         }
-        Ok(())
     }
 
-    pub fn new(reader: R, writer: W, grids: Arc<[grid::FlutGrid<u32>]>) -> FlutClient<R, W> {
+    pub fn new(reader: R, writer: W, grids: Arc<[grid::Flut<u32>]>) -> FlutClient<R, W> {
         FlutClient {
             reader: BufReader::new(reader),
             writer: BufWriter::new(writer),
@@ -246,10 +240,10 @@ where
                 Ok(Command::Size(canvas)) => self.size_command(canvas).await?,
                 Ok(Command::GetPixel(canvas, x, y)) => self.get_pixel_command(canvas, x, y).await?,
                 Ok(Command::SetPixel(canvas, x, y, color)) => {
-                    self.set_pixel_command(canvas, x, y, color)?;
+                    self.set_pixel_command(canvas, x, y, &color);
                 }
                 Ok(Command::ChangeCanvas(canvas)) => self.change_canvas_command(canvas)?,
-                Ok(Command::ChangeProtocol(protocol)) => self.change_protocol(protocol)?,
+                Ok(Command::ChangeProtocol(protocol)) => self.change_protocol(&protocol),
 
                 Err(err) if err.kind() == ErrorKind::UnexpectedEof => {
                     return Ok(());
@@ -262,10 +256,7 @@ where
     }
 }
 
-async fn handle_flut(
-    flut_listener: TcpListener,
-    grids: Arc<[grid::FlutGrid<u32>]>,
-) -> io::Result<()> {
+async fn handle_flut(flut_listener: TcpListener, grids: Arc<[grid::Flut<u32>]>) -> io::Result<()> {
     let mut handles = Vec::new();
     loop {
         let (mut socket, _) = flut_listener.accept().await?;
@@ -286,15 +277,11 @@ async fn handle_flut(
 #[allow(clippy::needless_return)]
 async fn main() {
     println!("created grids");
-    let grids: Arc<[FlutGrid<u32>; GRID_LENGTH]> =
-        [grid::FlutGrid::init(800, 600, 0xff00ffff)].into();
+    let grids: Arc<[Flut<u32>; GRID_LENGTH]> = [grid::Flut::init(800, 600, 0xff_00_ff_ff)].into();
 
-    let flut_listener = match TcpListener::bind(HOST).await {
-        Ok(listener) => listener,
-        Err(_) => {
-            eprintln!("Was unable to bind to {HOST}, please check if a different process is bound");
-            return;
-        }
+    let Ok(flut_listener) = TcpListener::bind(HOST).await else {
+        eprintln!("Was unable to bind to {HOST}, please check if a different process is bound");
+        return;
     };
     println!("bound flut listener");
 
@@ -306,7 +293,7 @@ async fn main() {
     ];
 
     for handle in handles {
-        println!("joined handle had result {:?}", handle.await)
+        println!("joined handle had result {:?}", handle.await);
     }
 }
 
