@@ -20,16 +20,46 @@ fn parse_coordinate(string: &str) -> io::Result<Coordinate> {
     }
 }
 
-fn parse_color(color: &str) -> io::Result<Color> {
-    if let Ok(bytes) = hex::decode(color) {
-        match bytes.len() {
-            1 => return Ok(Color::W8(bytes[0])),
-            3 => return Ok(Color::RGB24(bytes[0], bytes[1], bytes[2])),
-            4 => return Ok(Color::RGBA32(bytes[0], bytes[1], bytes[2], bytes[3])),
+type HexChar = u8;
+
+fn val(c1: u8, c2: u8) -> io::Result<HexChar> {
+    Ok((match c1 {
+        b'A'..=b'F' => c1 - b'A' + 10,
+        b'a'..=b'f' => c1 - b'a' + 10,
+        b'0'..=b'9' => c1 - b'0',
+        _ => return Err(Error::from(ErrorKind::InvalidInput)),
+    }) << 4
+        | (match c2 {
+            b'A'..=b'F' => c2 - b'A' + 10,
+            b'a'..=b'f' => c2 - b'a' + 10,
+            b'0'..=b'9' => c2 - b'0',
             _ => return Err(Error::from(ErrorKind::InvalidInput)),
+        }))
+}
+
+fn parse_color(color: &str) -> io::Result<Color> {
+    let color = color.as_bytes();
+    match color.len() {
+        2 if let Ok(w) = val(color[0], color[1]) => Ok(Color::W8(w)),
+        6 if let (Ok(r), Ok(g), Ok(b)) = (
+            val(color[0], color[1]),
+            val(color[2], color[3]),
+            val(color[4], color[5]),
+        ) =>
+        {
+            Ok(Color::RGB24(r, g, b))
         }
+        8 if let (Ok(r), Ok(g), Ok(b), Ok(a)) = (
+            val(color[0], color[1]),
+            val(color[2], color[3]),
+            val(color[4], color[5]),
+            val(color[6], color[7]),
+        ) =>
+        {
+            Ok(Color::RGBA32(r, g, b, a))
+        }
+        _ => Err(Error::from(ErrorKind::InvalidInput)),
     }
-    Err(Error::from(ErrorKind::InvalidInput))
 }
 
 impl TextParser {
@@ -117,7 +147,13 @@ impl<W: AsyncWriteExt + std::marker::Unpin> Responder<W> for TextParser {
             Response::Size(x, y) => writer.write_all(format!("SIZE {x} {y}\n").as_bytes()).await,
             Response::GetPixel(x, y, color) => {
                 writer
-                    .write_all(format!("PX {x} {y} {}\n", hex::encode_upper(color)).as_bytes())
+                    .write_all(
+                        format!(
+                            "PX {x} {y} {:02X}{:02X}{:02X}\n",
+                            color[0], color[1], color[2]
+                        )
+                        .as_bytes(),
+                    )
                     .await
             }
         }

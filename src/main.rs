@@ -1,5 +1,6 @@
 #![feature(test)]
 #![feature(sync_unsafe_cell)]
+#![feature(if_let_guard)]
 
 mod binary_protocol;
 mod grid;
