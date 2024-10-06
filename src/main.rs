@@ -62,8 +62,8 @@ fn get_pixel(
 }
 
 #[inline]
-fn increment_counter() {
-    COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+fn increment_counter(amount: u64) {
+    COUNTER.fetch_add(amount, std::sync::atomic::Ordering::Relaxed);
 }
 
 #[derive(Debug, PartialEq)]
@@ -156,6 +156,7 @@ where
     writer: BufWriter<W>,
     grids: Arc<[Flut<u32>]>,
     parser: ParserTypes,
+    counter: u64,
 }
 
 impl<R, W> FlutClient<R, W>
@@ -205,7 +206,7 @@ where
             Color::W8(white) => u32::from_be_bytes([*white, *white, *white, 0xff]),
         };
         set_pixel_rgba(self.grids.as_ref(), canvas, x, y, c);
-        increment_counter();
+        self.counter += 1;
     }
 
     fn change_canvas_command(&mut self, canvas: Canvas) -> io::Result<()> {
@@ -225,33 +226,47 @@ where
             writer: BufWriter::new(writer),
             grids,
             parser: ParserTypes::TextParser(TextParser::new(0)),
+            counter: 0,
+        }
+    }
+
+    async fn parse_command(&mut self, command: Result<Command, std::io::Error>) -> io::Result<()> {
+        match command {
+            Ok(Command::Help) => self.help_command().await,
+            Ok(Command::Size(canvas)) => self.size_command(canvas).await,
+            Ok(Command::GetPixel(canvas, x, y)) => self.get_pixel_command(canvas, x, y).await,
+            Ok(Command::SetPixel(canvas, x, y, color)) => {
+                self.set_pixel_command(canvas, x, y, &color);
+                Ok(())
+            }
+            Ok(Command::ChangeCanvas(canvas)) => self.change_canvas_command(canvas),
+            Ok(Command::ChangeProtocol(protocol)) => {
+                self.change_protocol(&protocol);
+                Ok(())
+            }
+
+            Err(err) if err.kind() == ErrorKind::UnexpectedEof => {
+                return Ok(());
+            }
+            Err(e) => {
+                return Err(e);
+            }
         }
     }
 
     pub async fn process_socket(&mut self) -> io::Result<()> {
         loop {
-            let parsed = match &self.parser {
-                ParserTypes::TextParser(parser) => parser.parse(&mut self.reader).await,
-                ParserTypes::BinaryParser(parser) => parser.parse(&mut self.reader).await,
-            };
+            for _ in 0..1000 {
+                let parsed = match &self.parser {
+                    ParserTypes::TextParser(parser) => parser.parse(&mut self.reader).await,
+                    ParserTypes::BinaryParser(parser) => parser.parse(&mut self.reader).await,
+                };
 
-            match parsed {
-                Ok(Command::Help) => self.help_command().await?,
-                Ok(Command::Size(canvas)) => self.size_command(canvas).await?,
-                Ok(Command::GetPixel(canvas, x, y)) => self.get_pixel_command(canvas, x, y).await?,
-                Ok(Command::SetPixel(canvas, x, y, color)) => {
-                    self.set_pixel_command(canvas, x, y, &color);
-                }
-                Ok(Command::ChangeCanvas(canvas)) => self.change_canvas_command(canvas)?,
-                Ok(Command::ChangeProtocol(protocol)) => self.change_protocol(&protocol),
-
-                Err(err) if err.kind() == ErrorKind::UnexpectedEof => {
-                    return Ok(());
-                }
-                Err(e) => {
-                    return Err(e);
-                }
+                self.parse_command(parsed).await?;
             }
+
+            increment_counter(self.counter);
+            self.counter = 0;
         }
     }
 }
