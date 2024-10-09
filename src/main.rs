@@ -240,12 +240,8 @@ where
                     match parsed {
                         Ok(Command::Help) => self.help_command().await?,
                         Ok(Command::Size(canvas)) => self.size_command(canvas).await?,
-                        Ok(Command::GetPixel(canvas, x, y)) => {
-                            self.get_pixel_command(canvas, x, y).await?
-                        }
-                        Ok(Command::SetPixel(canvas, x, y, color)) => {
-                            self.set_pixel_command(canvas, x, y, &color);
-                        }
+                        Ok(Command::GetPixel(canvas, x, y)) => self.get_pixel_command(canvas, x, y).await?,
+                        Ok(Command::SetPixel(canvas, x, y, color)) => self.set_pixel_command(canvas, x, y, &color),
                         Ok(Command::ChangeCanvas(canvas)) => {
                             self.change_canvas_command(canvas)?;
                             break 'outer;
@@ -254,13 +250,8 @@ where
                             self.change_protocol(&protocol);
                             break 'outer;
                         }
-
-                        Err(err) if err.kind() == ErrorKind::UnexpectedEof => {
-                            return Ok(());
-                        }
-                        Err(e) => {
-                            return Err(e);
-                        }
+                        Err(err) if err.kind() == ErrorKind::UnexpectedEof => return Ok(()),
+                        Err(e) => return Err(e),
                     }
                 }
                 increment_counter(self.counter);
