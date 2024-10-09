@@ -127,6 +127,7 @@ async fn listen_handle() -> io::Result<()> {
 macro_rules! build_parser_type_enum {
     ($($name:ident: $t:ty,)*) => {
 
+        #[derive(Clone)]
         enum ParserTypes {
             $($name($t),)*
         }
@@ -192,9 +193,9 @@ where
             None => return Err(Error::from(ErrorKind::InvalidInput)),
             Some(color) => color.to_be_bytes(),
         };
-        match_parser!(parser: self.parser => parser.unparse(Response::GetPixel(x,y,[color[0], color[1], color[2]]), &mut self.writer).await?);
-
-        self.writer.flush().await?;
+        match_parser!(parser: self.parser => parser.unparse(
+            Response::GetPixel(x,y,[color[0], color[1], color[2]]), &mut self.writer).await?
+        );
         Ok(())
     }
 
@@ -231,43 +232,40 @@ where
         }
     }
 
-    async fn parse_command(&mut self, command: Result<Command, std::io::Error>) -> io::Result<()> {
-        match command {
-            Ok(Command::Help) => self.help_command().await,
-            Ok(Command::Size(canvas)) => self.size_command(canvas).await,
-            Ok(Command::GetPixel(canvas, x, y)) => self.get_pixel_command(canvas, x, y).await,
-            Ok(Command::SetPixel(canvas, x, y, color)) => {
-                self.set_pixel_command(canvas, x, y, &color);
-                Ok(())
-            }
-            Ok(Command::ChangeCanvas(canvas)) => self.change_canvas_command(canvas),
-            Ok(Command::ChangeProtocol(protocol)) => {
-                self.change_protocol(&protocol);
-                Ok(())
-            }
-
-            Err(err) if err.kind() == ErrorKind::UnexpectedEof => {
-                return Ok(());
-            }
-            Err(e) => {
-                return Err(e);
-            }
-        }
-    }
-
     pub async fn process_socket(&mut self) -> io::Result<()> {
         loop {
-            for _ in 0..1000 {
-                let parsed = match &self.parser {
-                    ParserTypes::TextParser(parser) => parser.parse(&mut self.reader).await,
-                    ParserTypes::BinaryParser(parser) => parser.parse(&mut self.reader).await,
-                };
+            match_parser!(parser: &self.parser.clone() => 'outer: loop {
+                for _ in 0..1000 {
+                    let parsed = parser.parse(&mut self.reader).await;
+                    match parsed {
+                        Ok(Command::Help) => self.help_command().await?,
+                        Ok(Command::Size(canvas)) => self.size_command(canvas).await?,
+                        Ok(Command::GetPixel(canvas, x, y)) => {
+                            self.get_pixel_command(canvas, x, y).await?
+                        }
+                        Ok(Command::SetPixel(canvas, x, y, color)) => {
+                            self.set_pixel_command(canvas, x, y, &color);
+                        }
+                        Ok(Command::ChangeCanvas(canvas)) => {
+                            self.change_canvas_command(canvas)?;
+                            break 'outer;
+                        }
+                        Ok(Command::ChangeProtocol(protocol)) => {
+                            self.change_protocol(&protocol);
+                            break 'outer;
+                        }
 
-                self.parse_command(parsed).await?;
-            }
-
-            increment_counter(self.counter);
-            self.counter = 0;
+                        Err(err) if err.kind() == ErrorKind::UnexpectedEof => {
+                            return Ok(());
+                        }
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    }
+                }
+                increment_counter(self.counter);
+                self.counter = 0;
+            });
         }
     }
 }

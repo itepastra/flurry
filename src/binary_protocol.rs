@@ -11,6 +11,7 @@ const SET_PX_RGB_BIN: u8 = 128;
 const SET_PX_RGBA_BIN: u8 = 129;
 const SET_PX_W_BIN: u8 = 130;
 
+#[derive(Clone)]
 pub struct BinaryParser {}
 
 impl BinaryParser {
@@ -97,21 +98,27 @@ impl IOProtocol for BinaryParser {
 
 impl<W: AsyncWriteExt + std::marker::Unpin> Responder<W> for BinaryParser {
     async fn unparse(&self, response: Response, writer: &mut W) -> io::Result<()> {
-        let help_text = format!(
-            "
+        match response {
+            Response::Help => {
+                let help_text = format!(
+"
 You found the binary protocol help text
 you can get this by sending ({HELP_BIN:02X}) to the server
 To get the size of a canvas, send ({SIZE_BIN:02X}) (u8 canvas) to the server
 To set a pixel using RGB, use ({SET_PX_RGB_BIN:02X}) (u8 canvas) (x as u16_le) (y as u16_le) (u8 r) (u8 g) (u8 b)
 ",
-        );
-        match response {
-            Response::Help => writer.write_all(help_text.as_bytes()).await,
+);
+                writer.write_all(help_text.as_bytes()).await
+            }
             Response::Size(x, y) => {
                 writer.write_u16_le(x).await?;
                 writer.write_u16_le(y).await
             }
-            Response::GetPixel(_, _, c) => writer.write_all(&c).await,
+            Response::GetPixel(_, _, c) => {
+                writer.write_u8(c[0]).await?;
+                writer.write_u8(c[1]).await?;
+                writer.write_u8(c[2]).await
+            }
         }
     }
 }

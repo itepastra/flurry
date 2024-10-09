@@ -8,6 +8,7 @@ use crate::{
     GRID_LENGTH, HELP_TEXT,
 };
 
+#[derive(Clone)]
 pub struct TextParser {
     canvas: Canvas,
 }
