@@ -32,14 +32,14 @@ impl<R: AsyncBufRead + AsyncBufReadExt + std::marker::Unpin> Parser<R> for Binar
                 }
                 GET_PX_BIN => {
                     let canvas = reader.read_u8().await?;
-                    let horizontal = reader.read_u16_le().await?;
-                    let vertical = reader.read_u16_le().await?;
+                    let horizontal = reader.read_u16().await?;
+                    let vertical = reader.read_u16().await?;
                     Ok(Command::GetPixel(canvas, horizontal, vertical))
                 }
                 SET_PX_W_BIN => {
                     let canvas = reader.read_u8().await?;
-                    let horizontal = reader.read_u16_le().await?;
-                    let vertical = reader.read_u16_le().await?;
+                    let horizontal = reader.read_u16().await?;
+                    let vertical = reader.read_u16().await?;
                     let white = reader.read_u8().await?;
                     Ok(Command::SetPixel(
                         canvas,
@@ -50,8 +50,8 @@ impl<R: AsyncBufRead + AsyncBufReadExt + std::marker::Unpin> Parser<R> for Binar
                 }
                 SET_PX_RGB_BIN => {
                     let canvas = reader.read_u8().await?;
-                    let horizontal = reader.read_u16_le().await?;
-                    let vertical = reader.read_u16_le().await?;
+                    let horizontal = reader.read_u16().await?;
+                    let vertical = reader.read_u16().await?;
                     let red = reader.read_u8().await?;
                     let green = reader.read_u8().await?;
                     let blue = reader.read_u8().await?;
@@ -64,8 +64,8 @@ impl<R: AsyncBufRead + AsyncBufReadExt + std::marker::Unpin> Parser<R> for Binar
                 }
                 SET_PX_RGBA_BIN => {
                     let canvas = reader.read_u8().await?;
-                    let horizontal = reader.read_u16_le().await?;
-                    let vertical = reader.read_u16_le().await?;
+                    let horizontal = reader.read_u16().await?;
+                    let vertical = reader.read_u16().await?;
                     let red = reader.read_u8().await?;
                     let green = reader.read_u8().await?;
                     let blue = reader.read_u8().await?;
@@ -157,7 +157,7 @@ mod tests {
         let thingy = parser.parse(&mut bufreader).await;
         assert_eq!(
             thingy.unwrap(),
-            Command::SetPixel(1, 0x4269, 0x6942, Color::W8(0x82))
+            Command::SetPixel(1, 0x6942, 0x4269, Color::W8(0x82))
         );
     }
 
@@ -168,10 +168,10 @@ mod tests {
             .read(&[
                 SET_PX_RGB_BIN,
                 0x01,
-                0x69,
-                0x42,
                 0x42,
                 0x69,
+                0x69,
+                0x42,
                 0x82,
                 0x00,
                 0xff,
@@ -192,10 +192,10 @@ mod tests {
             .read(&[
                 SET_PX_RGBA_BIN,
                 0x01,
-                0x69,
-                0x42,
                 0x42,
                 0x69,
+                0x69,
+                0x42,
                 0x82,
                 0x00,
                 0xff,
@@ -218,7 +218,7 @@ mod tests {
             .build();
         let mut bufreader = BufReader::new(reader);
         let thingy = parser.parse(&mut bufreader).await;
-        assert_eq!(thingy.unwrap(), Command::GetPixel(3, 0x4269, 0x6942));
+        assert_eq!(thingy.unwrap(), Command::GetPixel(3, 0x6942, 0x4269));
     }
 
     #[tokio::test]
@@ -242,7 +242,7 @@ mod tests {
                 0x69,
                 0x42,
                 0x42,
-                0x69,
+                0x70,
                 0x82,
                 0x00,
                 0xff,
@@ -254,11 +254,11 @@ mod tests {
         let thingy2 = parser.parse(&mut bufreader).await;
         assert_eq!(
             thingy.unwrap(),
-            Command::SetPixel(1, 0x4269, 0x6942, Color::RGB24(0x82, 0x00, 0xff))
+            Command::SetPixel(1, 0x6942, 0x4269, Color::RGB24(0x82, 0x00, 0xff))
         );
         assert_eq!(
             thingy2.unwrap(),
-            Command::SetPixel(1, 0x4269, 0x6942, Color::RGBA32(0x82, 0x00, 0xff, 0xa0))
+            Command::SetPixel(1, 0x6942, 0x4270, Color::RGBA32(0x82, 0x00, 0xff, 0xa0))
         );
     }
 }
