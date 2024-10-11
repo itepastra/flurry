@@ -1,5 +1,7 @@
 use std::cell::SyncUnsafeCell;
 
+use image::{DynamicImage, GenericImage, GenericImageView, ImageBuffer, Pixel, Rgb, Rgba};
+
 use crate::Coordinate;
 
 pub trait Grid<I, V> {
@@ -60,6 +62,21 @@ impl<T> Grid<Coordinate, T> for Flut<T> {
     fn get_unchecked(&self, x: Coordinate, y: Coordinate) -> &T {
         let idx = y as usize * self.size_x + x as usize;
         unsafe { &(*self.cells.get())[idx] }
+    }
+}
+
+impl GenericImageView for Flut<u32> {
+    type Pixel = Rgb<u8>;
+
+    fn dimensions(&self) -> (u32, u32) {
+        let (x, y) = self.get_size();
+        (x as u32, y as u32)
+    }
+
+    fn get_pixel(&self, x: u32, y: u32) -> Self::Pixel {
+        let pixel = self.get_unchecked(x as u16, y as u16);
+        let [r, g, b, _a] = pixel.to_be_bytes();
+        Rgb::from([r, g, b])
     }
 }
 

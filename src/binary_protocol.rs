@@ -111,8 +111,8 @@ To set a pixel using RGB, use ({SET_PX_RGB_BIN:02X}) (u8 canvas) (x as u16_le) (
                 writer.write_all(help_text.as_bytes()).await
             }
             Response::Size(x, y) => {
-                writer.write_u16_le(x).await?;
-                writer.write_u16_le(y).await
+                writer.write_u16(x).await?;
+                writer.write_u16(y).await
             }
             Response::GetPixel(_, _, c) => {
                 writer.write_u8(c[0]).await?;

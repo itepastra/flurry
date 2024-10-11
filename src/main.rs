@@ -7,17 +7,24 @@ mod grid;
 mod text_protocol;
 
 use std::{
+    alloc::System,
+    fmt::Debug,
+    fs::{create_dir_all, File},
     io::{self, Error, ErrorKind},
+    path::Path,
     sync::{atomic::AtomicU64, Arc},
-    time::Duration,
+    time::{Duration, SystemTime},
 };
 
 use binary_protocol::BinaryParser;
+use chrono::Local;
 use grid::{Flut, Grid};
+use image::{codecs::jpeg::JpegEncoder, save_buffer, DynamicImage, GenericImageView, SubImage};
 use text_protocol::TextParser;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
     net::TcpListener,
+    time::{interval, Instant},
 };
 
 extern crate test;
@@ -261,6 +268,30 @@ where
     }
 }
 
+async fn save_image_frames(grids: Arc<[grid::Flut<u32>]>) -> io::Result<()> {
+    let base_dir = Path::new("./recordings");
+    let mut timer = interval(Duration::from_secs(5));
+    create_dir_all(base_dir)?;
+    loop {
+        timer.tick().await;
+        for grid in grids.as_ref() {
+            let p = base_dir.join(format!("{}", Local::now().format("%Y-%m-%d %H:%M:%S")));
+            println!("timer ticked, grid writing to {:?}", p);
+            let mut file_writer = File::create(p)?;
+
+            let encoder = JpegEncoder::new_with_quality(&mut file_writer, 50);
+            grid.view(0, 0, grid.width(), grid.height()).to_image();
+
+            let sub_image = SubImage::new(grid, 0, 0, grid.width(), grid.height());
+            let image = sub_image.to_image();
+            match image.write_with_encoder(encoder) {
+                Ok(_) => {}
+                Err(err) => eprintln!("{}", err),
+            }
+        }
+    }
+}
+
 async fn handle_flut(flut_listener: TcpListener, grids: Arc<[grid::Flut<u32>]>) -> io::Result<()> {
     let mut handles = Vec::new();
     loop {
@@ -293,8 +324,10 @@ async fn main() {
     let handles = vec![
         // log the amount of changed pixels each second
         (tokio::spawn(listen_handle())),
+        // save frames every 5 seconds
+        (tokio::spawn(save_image_frames(grids.clone()))),
         // accept and handle flut connections
-        (tokio::spawn(handle_flut(flut_listener, grids))),
+        (tokio::spawn(handle_flut(flut_listener, grids.clone()))),
     ];
 
     for handle in handles {
