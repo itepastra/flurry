@@ -20,14 +20,15 @@ use grid::{Flut, Grid};
 use image::{codecs::jpeg::JpegEncoder, GenericImageView, SubImage};
 use text_protocol::TextParser;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
-    net::TcpListener,
-    time::{interval, Instant},
+    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
+    net::{TcpListener, TcpStream},
+    time::interval,
 };
 
 extern crate test;
 const GRID_LENGTH: usize = 1;
 const HOST: &str = "0.0.0.0:7791";
+const NO_AUTH: bool = true;
 
 const HELP_TEXT: &[u8] = b"Flurry is a pixelflut implementation, this means you can use commands to get and set pixels in the canvas
 SIZE returns the size of the canvas
@@ -273,9 +274,10 @@ async fn save_image_frames(grids: Arc<[grid::Flut<u32>]>) -> io::Result<()> {
     loop {
         timer.tick().await;
         for grid in grids.as_ref() {
-            let p = base_dir.join(format!("{}", Local::now().format("%Y-%m-%d %H:%M:%S")));
-            println!("timer ticked, grid writing to {:?}", p);
-            let mut file_writer = File::create(p)?;
+            let now = Local::now().format("%Y-%m-%d %H:%M:%S");
+            let path_grid = base_dir.join(format!("{}-grid", now));
+            println!("timer ticked, grid writing to {:?}", path_grid);
+            let mut file_writer = File::create(path_grid)?;
 
             let encoder = JpegEncoder::new_with_quality(&mut file_writer, 50);
             grid.view(0, 0, grid.width(), grid.height()).to_image();
@@ -290,18 +292,35 @@ async fn save_image_frames(grids: Arc<[grid::Flut<u32>]>) -> io::Result<()> {
     }
 }
 
+async fn handle_login(stream: &mut TcpStream) -> bool {
+    let mut buf = BufReader::new(stream);
+    let mut read = vec![0; 64];
+    match buf.read_until(0x00, &mut read).await {
+        Err(_) => return false,
+        Ok(n) if n == 0 => return false,
+        Ok(n) => {
+            todo!("call server for auth, token was {} long", n)
+        }
+    }
+}
+
 async fn handle_flut(flut_listener: TcpListener, grids: Arc<[grid::Flut<u32>]>) -> io::Result<()> {
     let mut handles = Vec::new();
     loop {
-        let (mut socket, _) = flut_listener.accept().await?;
+        let (mut socket, addr) = flut_listener.accept().await?;
         let grids = grids.clone();
         handles.push(tokio::spawn(async move {
-            let (reader, writer) = socket.split();
-            let mut connection = FlutClient::new(reader, writer, grids);
-            let resp = connection.process_socket().await;
-            match resp {
-                Ok(()) => Ok(()),
-                Err(err) => Err(err),
+            if NO_AUTH || handle_login(&mut socket).await {
+                let (reader, writer) = socket.split();
+                let mut connection = FlutClient::new(reader, writer, grids);
+                let resp = connection.process_socket().await;
+                match resp {
+                    Ok(()) => Ok(()),
+                    Err(err) => Err(err),
+                }
+            } else {
+                println!("failed login attempt from {}", addr);
+                Ok(())
             }
         }));
     }
