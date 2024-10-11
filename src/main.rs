@@ -7,19 +7,17 @@ mod grid;
 mod text_protocol;
 
 use std::{
-    alloc::System,
-    fmt::Debug,
     fs::{create_dir_all, File},
     io::{self, Error, ErrorKind},
     path::Path,
     sync::{atomic::AtomicU64, Arc},
-    time::{Duration, SystemTime},
+    time::Duration,
 };
 
 use binary_protocol::BinaryParser;
 use chrono::Local;
 use grid::{Flut, Grid};
-use image::{codecs::jpeg::JpegEncoder, save_buffer, DynamicImage, GenericImageView, SubImage};
+use image::{codecs::jpeg::JpegEncoder, GenericImageView, SubImage};
 use text_protocol::TextParser;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
