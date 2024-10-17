@@ -4,6 +4,7 @@
 
 mod binary_protocol;
 mod grid;
+mod state_binary_protocol;
 mod text_protocol;
 
 use std::{
@@ -72,20 +73,25 @@ fn increment_counter(amount: u64) {
     COUNTER.fetch_add(amount, std::sync::atomic::Ordering::Relaxed);
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 enum Color {
     RGB24(u8, u8, u8),
     RGBA32(u8, u8, u8, u8),
     W8(u8),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 enum Protocol {
     Text,
     Binary,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
+enum LockableCommand {
+    SetPixel(Canvas, Coordinate, Coordinate, Color),
+}
+
+#[derive(Debug, Clone, PartialEq)]
 enum Command {
     Help,
     Size(Canvas),
@@ -93,6 +99,7 @@ enum Command {
     SetPixel(Canvas, Coordinate, Coordinate, Color),
     ChangeCanvas(Canvas),
     ChangeProtocol(Protocol),
+    Multiple(Vec<LockableCommand>),
 }
 
 #[derive(Debug, PartialEq)]
@@ -254,6 +261,13 @@ where
                         Ok(Command::ChangeProtocol(protocol)) => {
                             self.change_protocol(&protocol);
                             break 'outer;
+                        }
+                        Ok(Command::Multiple(vec)) => {
+                            for cmd in vec {
+                                match cmd {
+                                    LockableCommand::SetPixel(canvas,x,y,color)=>self.set_pixel_command(canvas,x,y, &color),
+                                }
+                            }
                         }
                         Err(err) if err.kind() == ErrorKind::UnexpectedEof => return Ok(()),
                         Err(e) => return Err(e),
