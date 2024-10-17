@@ -4,9 +4,11 @@ use atoi_radix10::parse_from_str;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWriteExt};
 
 use crate::{
-    Canvas, Color, Command, Coordinate, IOProtocol, Parser, Protocol, Responder, Response,
-    GRID_LENGTH, HELP_TEXT,
+    config::{GRID_LENGTH, HELP_TEXT},
+    Canvas, Color, Command, Coordinate, Protocol, Response,
 };
+
+use super::{IOProtocol, Parser, Responder};
 
 #[derive(Clone)]
 pub struct TextParser {

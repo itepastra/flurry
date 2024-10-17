@@ -12,6 +12,12 @@ image = "0.25.2"
 tokio = { version = "1.38", features = ["full"] }
 tokio-test = "*"
 
+[dev-dependencies]
+tempfile = "*"
+test-case = "*"
+criterion = "*"
+rand = "*"
+
 [profile.dev]
 opt-level = 1
 

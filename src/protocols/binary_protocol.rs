@@ -2,7 +2,9 @@ use std::io::{self, Error, ErrorKind};
 
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt};
 
-use crate::{Canvas, Color, Command, IOProtocol, Parser, Responder, Response};
+use crate::{Canvas, Color, Command, Response};
+
+use super::{IOProtocol, Parser, Responder};
 
 const SIZE_BIN: u8 = 115;
 const HELP_BIN: u8 = 104;

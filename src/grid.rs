@@ -1,6 +1,6 @@
 use std::cell::SyncUnsafeCell;
 
-use image::{DynamicImage, GenericImage, GenericImageView, ImageBuffer, Pixel, Rgb, Rgba};
+use image::{GenericImageView, Rgb};
 
 use crate::Coordinate;
 
@@ -74,7 +74,7 @@ impl GenericImageView for Flut<u32> {
     }
 
     fn get_pixel(&self, x: u32, y: u32) -> Self::Pixel {
-        let pixel = self.get_unchecked(x as u16, y as u16);
+        let pixel = self.get_unchecked(x as Coordinate, y as Coordinate);
         let [r, g, b, _a] = pixel.to_be_bytes();
         Rgb::from([r, g, b])
     }
@@ -83,9 +83,8 @@ impl GenericImageView for Flut<u32> {
 #[cfg(test)]
 #[allow(clippy::needless_return)]
 mod tests {
-    use super::*;
-    use crate::grid::Flut;
-    use test::Bencher;
+    use super::Flut;
+    use super::Grid;
 
     #[tokio::test]
     async fn test_grid_init_values() {
@@ -131,31 +130,5 @@ mod tests {
         grid.set(3, 1, 256);
         assert_eq!(grid.get(3, 1), None);
         assert_eq!(grid.get(1, 2), Some(&0));
-    }
-
-    #[bench]
-    fn bench_init(b: &mut Bencher) {
-        b.iter(|| Flut::init(800, 600, 0));
-    }
-
-    #[bench]
-    fn bench_set(b: &mut Bencher) {
-        let grid = Flut::init(800, 600, 0);
-        b.iter(|| {
-            let x = test::black_box(293);
-            let y = test::black_box(222);
-            let color = test::black_box(0x29_39_23);
-            grid.set(x, y, color);
-        });
-    }
-
-    #[bench]
-    fn bench_get(b: &mut Bencher) {
-        let grid = Flut::init(800, 600, 0);
-        b.iter(|| {
-            let x = test::black_box(293);
-            let y = test::black_box(222);
-            grid.get(x, y)
-        });
     }
 }
