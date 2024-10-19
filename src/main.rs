@@ -23,7 +23,7 @@ use tokio::{
 };
 
 /// This function logs the current amount of changed pixels to stdout every second
-async fn pixel_change_stdout_log() -> () {
+async fn pixel_change_stdout_log() -> io::Result<()> {
     let mut interval = tokio::time::interval(Duration::from_millis(1000));
     loop {
         interval.tick().await;
@@ -65,34 +65,20 @@ async fn save_image_frames(grids: Arc<[grid::Flut<u32>]>, duration: Duration) ->
 /// Handle connections made to the socket, keeps a vec of the currently active connections,
 /// uses timeout to loop through them and clean them up to stop a memory leak while not throwing
 /// everything away
-async fn handle_flut(flut_listener: TcpListener, grids: Arc<[grid::Flut<u32>]>) -> () {
-    let mut handles = VecDeque::new();
-    tokio::spawn(async {
-        loop {
-            if let Some(handle) = handles.pop_front() {
-                match timeout(Duration::from_secs(10), handle).await {
-                    Ok(Ok(())) => debug_println!("connection closed ok"),
-                    Ok(Err(e)) => debug_eprintln!("connection error {:?}", e),
-                    Err(_) => handles.push_back(handle),
-                }
-            } else {
-                sleep(Duration::from_secs(30)).await;
-            }
-        }
-    });
+async fn handle_flut(flut_listener: TcpListener, grids: Arc<[grid::Flut<u32>]>) -> io::Result<()> {
+    let mut handles = Vec::new();
     loop {
-        if let Ok((mut socket, _)) = flut_listener.accept().await {
-            let grids = grids.clone();
-            handles.push_back(tokio::spawn(async move {
-                let (reader, writer) = socket.split();
-                let mut connection = FlutClient::new(reader, writer, grids);
-                let resp = connection.process_socket().await;
-                match resp {
-                    Ok(()) => Ok(()),
-                    Err(err) => Err(err),
-                }
-            }))
-        };
+        let (mut socket, _) = flut_listener.accept().await?;
+        let grids = grids.clone();
+        handles.push(tokio::spawn(async move {
+            let (reader, writer) = socket.split();
+            let mut connection = FlutClient::new(reader, writer, grids);
+            let resp = connection.process_socket().await;
+            match resp {
+                Ok(()) => Ok(()),
+                Err(err) => Err(err),
+            }
+        }))
     }
 }
 
