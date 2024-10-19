@@ -12,6 +12,7 @@ pub mod flutclient;
 pub mod grid;
 pub mod protocols;
 pub mod utils;
+pub mod webapi;
 
 mod color;
 

@@ -14,7 +14,7 @@ use flurry::{
     grid::{self, Flut},
     COUNTER,
 };
-use tokio::{    
+use tokio::{
     net::TcpListener,
     time::interval
 };
