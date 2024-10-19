@@ -1,9 +1,9 @@
 use std::{
     collections::VecDeque,
     fs::{create_dir_all, File},
-    io::{self, Error, ErrorKind},
+    io,
     path::Path,
-    sync::{atomic::AtomicU64, Arc},
+    sync::Arc,
     time::Duration,
 };
 
@@ -17,9 +17,8 @@ use flurry::{
 };
 use image::{codecs::jpeg::JpegEncoder, GenericImageView, SubImage};
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
     net::TcpListener,
-    time::{interval, sleep, timeout, Instant},
+    time::interval
 };
 
 /// This function logs the current amount of changed pixels to stdout every second
