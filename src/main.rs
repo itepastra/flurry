@@ -1,14 +1,12 @@
 use std::{
-    collections::VecDeque,
     fs::{create_dir_all, File},
-    io::{self, Error, ErrorKind},
+    io::{self},
     path::Path,
-    sync::{atomic::AtomicU64, Arc},
+    sync::Arc,
     time::Duration,
 };
 
 use chrono::Local;
-use debug_print::{debug_eprintln, debug_println};
 use flurry::{
     config::{GRID_LENGTH, HOST, IMAGE_SAVE_INTERVAL},
     flutclient::FlutClient,
@@ -16,11 +14,7 @@ use flurry::{
     COUNTER,
 };
 use image::{codecs::jpeg::JpegEncoder, GenericImageView, SubImage};
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
-    net::TcpListener,
-    time::{interval, sleep, timeout, Instant},
-};
+use tokio::{net::TcpListener, time::interval};
 
 /// This function logs the current amount of changed pixels to stdout every second
 async fn pixel_change_stdout_log() -> io::Result<()> {
@@ -46,7 +40,6 @@ async fn save_image_frames(grids: Arc<[grid::Flut<u32>]>, duration: Duration) ->
         timer.tick().await;
         for grid in grids.as_ref() {
             let p = base_dir.join(format!("{}", Local::now().format("%Y-%m-%d %H:%M:%S")));
-            debug_println!("timer ticked, grid writing to {:?}", p);
             let mut file_writer = File::create(p)?;
 
             let encoder = JpegEncoder::new_with_quality(&mut file_writer, 50);

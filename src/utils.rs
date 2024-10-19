@@ -19,7 +19,7 @@ impl RepeatSome {
 impl AsyncRead for RepeatSome {
     fn poll_read(
         self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
+        _cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
         while buf.remaining() > self.len {
@@ -29,18 +29,13 @@ impl AsyncRead for RepeatSome {
     }
 }
 
+#[derive(Default)]
 pub struct Drain {}
-
-impl Drain {
-    pub fn new() -> Self {
-        Drain {}
-    }
-}
 
 impl AsyncWrite for Drain {
     fn poll_write(
         self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
+        _cx: &mut std::task::Context<'_>,
         buf: &[u8],
     ) -> Poll<Result<usize, std::io::Error>> {
         Poll::Ready(Ok(buf.len()))
@@ -48,14 +43,14 @@ impl AsyncWrite for Drain {
 
     fn poll_flush(
         self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
+        _cx: &mut std::task::Context<'_>,
     ) -> Poll<Result<(), std::io::Error>> {
         Poll::Ready(Ok(()))
     }
 
     fn poll_shutdown(
         self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
+        _cx: &mut std::task::Context<'_>,
     ) -> Poll<Result<(), std::io::Error>> {
         Poll::Ready(Ok(()))
     }

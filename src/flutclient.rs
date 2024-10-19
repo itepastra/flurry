@@ -106,8 +106,8 @@ where
 
     fn change_protocol(&mut self, protocol: &Protocol) {
         match protocol {
-            Protocol::Text => self.parser = ParserTypes::TextParser(TextParser::new(0)),
-            Protocol::Binary => self.parser = ParserTypes::BinaryParser(BinaryParser::new()),
+            Protocol::Text => self.parser = ParserTypes::TextParser(TextParser::default()),
+            Protocol::Binary => self.parser = ParserTypes::BinaryParser(BinaryParser::default()),
         }
     }
 
@@ -116,7 +116,7 @@ where
             reader: BufReader::new(reader),
             writer: BufWriter::new(writer),
             grids,
-            parser: ParserTypes::TextParser(TextParser::new(0)),
+            parser: ParserTypes::TextParser(TextParser::default()),
             counter: 0,
         }
     }
