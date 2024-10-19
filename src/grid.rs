@@ -12,20 +12,20 @@ pub trait Grid<I, V> {
     fn set(&self, x: I, y: I, value: V);
 }
 
-pub struct FlutGrid<T> {
+pub struct Flut<T> {
     size_x: usize,
     size_y: usize,
     cells: SyncUnsafeCell<Vec<T>>,
     jpgbuf: RwLock<Vec<u8>>
 }
 
-impl<T: Clone> FlutGrid<T> {
-    pub fn init(size_x: usize, size_y: usize, value: T) -> FlutGrid<T> {
+impl<T: Clone> Flut<T> {
+    pub fn init(size_x: usize, size_y: usize, value: T) -> Flut<T> {
         let mut vec = Vec::with_capacity(size_x * size_y);
         for _ in 0..(size_x * size_y) {
             vec.push(value.clone());
         }
-        FlutGrid {
+        Flut {
             size_x,
             size_y,
             cells: vec.into(),
@@ -38,7 +38,7 @@ impl<T: Clone> FlutGrid<T> {
     }
 }
 
-impl<T> FlutGrid<T> {
+impl<T> Flut<T> {
     fn index(&self, x: Coordinate, y: Coordinate) -> Option<usize> {
         let x = x as usize;
         let y = y as usize;
@@ -52,7 +52,7 @@ impl<T> FlutGrid<T> {
     }
 }
 
-impl<T> Grid<Coordinate, T> for FlutGrid<T> {
+impl<T> Grid<Coordinate, T> for Flut<T> {
     fn get(&self, x: Coordinate, y: Coordinate) -> Option<&T> {
         self.index(x, y)
             .map(|idx| unsafe { &(*self.cells.get())[idx] })
@@ -71,7 +71,7 @@ impl<T> Grid<Coordinate, T> for FlutGrid<T> {
     }
 }
 
-impl GenericImageView for FlutGrid<u32> {
+impl GenericImageView for Flut<u32> {
     type Pixel = Rgb<u8>;
 
     fn dimensions(&self) -> (u32, u32) {
@@ -87,7 +87,7 @@ impl GenericImageView for FlutGrid<u32> {
     
 }
 
-impl FlutGrid<u32> {
+impl Flut<u32> {
     pub async fn update_jpg_buffer(&self) {
         let mut jpgbuf = self.jpgbuf.write().await;
         jpgbuf.clear();
@@ -103,19 +103,19 @@ impl FlutGrid<u32> {
 #[cfg(test)]
 #[allow(clippy::needless_return)]
 mod tests {
-    use super::FlutGrid;
+    use super::Flut;
     use super::Grid;
 
     #[tokio::test]
     async fn test_grid_init_values() {
-        let grid = FlutGrid::init(3, 3, 0);
+        let grid = Flut::init(3, 3, 0);
 
         assert_eq!(grid.cells.into_inner(), vec![0, 0, 0, 0, 0, 0, 0, 0, 0]);
     }
 
     #[tokio::test]
     async fn test_grid_init_size() {
-        let grid = FlutGrid::init(800, 600, 0);
+        let grid = Flut::init(800, 600, 0);
 
         assert_eq!(grid.size_x, 800);
         assert_eq!(grid.size_y, 600);
@@ -123,7 +123,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_grid_set() {
-        let grid = FlutGrid::init(3, 3, 0);
+        let grid = Flut::init(3, 3, 0);
         grid.set(1, 1, 255);
         grid.set(2, 1, 256);
         assert_eq!(grid.cells.into_inner(), vec![0, 0, 0, 0, 255, 256, 0, 0, 0]);
@@ -131,7 +131,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_grid_set_out_of_range() {
-        let grid = FlutGrid::init(3, 3, 0);
+        let grid = Flut::init(3, 3, 0);
         grid.set(1, 1, 255);
         grid.set(3, 1, 256);
         assert_eq!(grid.cells.into_inner(), vec![0, 0, 0, 0, 255, 0, 0, 0, 0]);
@@ -139,14 +139,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_grid_get() {
-        let grid = FlutGrid::init(3, 3, 0);
+        let grid = Flut::init(3, 3, 0);
         grid.set(1, 2, 222);
         assert_eq!(grid.get(1, 2), Some(&222));
     }
 
     #[tokio::test]
     async fn test_grid_get_out_of_range() {
-        let grid = FlutGrid::init(3, 3, 0);
+        let grid = Flut::init(3, 3, 0);
         grid.set(3, 1, 256);
         assert_eq!(grid.get(3, 1), None);
         assert_eq!(grid.get(1, 2), Some(&0));

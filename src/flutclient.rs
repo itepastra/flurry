@@ -7,7 +7,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
 
 use crate::{
     get_pixel,
-    grid::{self, FlutGrid},
+    grid::{self, Flut},
     increment_counter,
     protocols::{BinaryParser, IOProtocol, Parser, Responder, TextParser},
     set_pixel_rgba, Canvas, Color, Command, Coordinate, Protocol, Response,
@@ -45,7 +45,7 @@ where
 {
     reader: BufReader<R>,
     writer: BufWriter<W>,
-    grids: Arc<[FlutGrid<u32>]>,
+    grids: Arc<[Flut<u32>]>,
     parser: ParserTypes,
     counter: u64,
 }
@@ -111,7 +111,7 @@ where
         }
     }
 
-    pub fn new(reader: R, writer: W, grids: Arc<[grid::FlutGrid<u32>]>) -> Self {
+    pub fn new(reader: R, writer: W, grids: Arc<[grid::Flut<u32>]>) -> Self {
         FlutClient {
             reader: BufReader::new(reader),
             writer: BufWriter::new(writer),
