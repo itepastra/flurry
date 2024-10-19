@@ -1,10 +1,5 @@
 use std::{
-    collections::VecDeque,
-    fs::{create_dir_all, File},
-    io,
-    path::Path,
-    sync::Arc,
-    time::Duration,
+    collections::VecDeque, convert::Infallible, fs::{create_dir_all, File}, io::{self, Write}, path::Path, ptr::write_bytes, sync::Arc, time::Duration
 };
 
 use chrono::Local;
@@ -20,9 +15,10 @@ use tokio::{
     net::TcpListener,
     time::interval
 };
+type Never = Infallible;
 
 /// This function logs the current amount of changed pixels to stdout every second
-async fn pixel_change_stdout_log() -> io::Result<()> {
+async fn pixel_change_stdout_log() -> io::Result<Never> {
     let mut interval = tokio::time::interval(Duration::from_millis(1000));
     loop {
         interval.tick().await;
@@ -37,7 +33,7 @@ async fn pixel_change_stdout_log() -> io::Result<()> {
 /// # Errors
 ///
 /// This function will return an error if it is unable to create or write to the file for the image
-async fn save_image_frames(grids: Arc<[grid::Flut<u32>]>, duration: Duration) -> io::Result<()> {
+async fn save_image_frames(grids: Arc<[grid::Flut<u32>]>, duration: Duration) -> io::Result<Never> {
     let base_dir = Path::new("./recordings");
     let mut timer = interval(duration);
     create_dir_all(base_dir)?;
@@ -64,7 +60,7 @@ async fn save_image_frames(grids: Arc<[grid::Flut<u32>]>, duration: Duration) ->
 /// Handle connections made to the socket, keeps a vec of the currently active connections,
 /// uses timeout to loop through them and clean them up to stop a memory leak while not throwing
 /// everything away
-async fn handle_flut(flut_listener: TcpListener, grids: Arc<[grid::Flut<u32>]>) -> io::Result<()> {
+async fn handle_flut(flut_listener: TcpListener, grids: Arc<[grid::Flut<u32>]>) -> io::Result<Never> {
     let mut handles = Vec::new();
     loop {
         let (mut socket, _) = flut_listener.accept().await?;
@@ -78,6 +74,16 @@ async fn handle_flut(flut_listener: TcpListener, grids: Arc<[grid::Flut<u32>]>) 
                 Err(err) => Err(err),
             }
         }))
+    }
+}
+
+async fn jpeg_update_loop(grids: Arc<[Flut<u32>]>) -> io::Result<Never> {
+    let mut interval = interval(Duration::from_millis(20));
+    loop {
+        interval.tick().await;
+        for grid in grids.as_ref() {
+            grid.update_jpg_buffer().await;
+        }
     }
 }
 
@@ -97,6 +103,7 @@ async fn main() {
         (tokio::spawn(pixel_change_stdout_log())),
         (tokio::spawn(save_image_frames(grids.clone(), IMAGE_SAVE_INTERVAL))),
         (tokio::spawn(handle_flut(flut_listener, grids.clone()))),
+        (tokio::spawn(jpeg_update_loop(grids.clone())))
     ];
 
     for handle in handles {
