@@ -8,7 +8,9 @@ async-trait = "0.1.83"
 atoi_radix10 = "0.0.1"
 bytes = "1.6.0"
 chrono = "0.4.38"
+debug_print = "1.0.0"
 image = "0.25.2"
+rand = "*"
 tokio = { version = "1.38", features = ["full"] }
 tokio-test = "*"
 

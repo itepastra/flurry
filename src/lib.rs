@@ -4,6 +4,7 @@
 
 use std::sync::atomic::AtomicU64;
 
+pub use color::Color;
 use grid::Grid;
 
 pub mod config;
@@ -11,6 +12,8 @@ pub mod flutclient;
 pub mod grid;
 pub mod protocols;
 pub mod utils;
+
+mod color;
 
 pub type Canvas = u8;
 pub type Coordinate = u16;
@@ -44,13 +47,6 @@ fn get_pixel(
 #[inline]
 fn increment_counter(amount: u64) {
     COUNTER.fetch_add(amount, std::sync::atomic::Ordering::Relaxed);
-}
-
-#[derive(Debug, PartialEq)]
-pub enum Color {
-    RGB24(u8, u8, u8),
-    RGBA32(u8, u8, u8, u8),
-    W8(u8),
 }
 
 #[derive(Debug, PartialEq)]

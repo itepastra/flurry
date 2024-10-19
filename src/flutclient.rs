@@ -139,7 +139,9 @@ where
                             self.change_protocol(&protocol);
                             break 'outer;
                         }
-                        Err(err) if err.kind() == ErrorKind::UnexpectedEof => return Ok(()),
+                        Err(err) if err.kind() == ErrorKind::UnexpectedEof => {
+                increment_counter(self.counter);
+                            return Ok(())},
                         Err(e) => return Err(e),
                     }
                 }
