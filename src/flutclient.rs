@@ -107,7 +107,7 @@ where
     fn change_protocol(&mut self, protocol: &Protocol) {
         match protocol {
             Protocol::Text => self.parser = ParserTypes::TextParser(TextParser::new(0)),
-            Protocol::Binary => self.parser = ParserTypes::BinaryParser(BinaryParser::new()),
+            Protocol::Binary => self.parser = ParserTypes::BinaryParser(BinaryParser::default()),
         }
     }
 
