@@ -1,10 +1,11 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
 use axum::{
     extract::{ws::{Message, WebSocket, WebSocketUpgrade}, ConnectInfo},
     response::IntoResponse,
     routing::any,
     Router,
+    extract::State,
 };
 use axum_extra::TypedHeader;
 use futures::StreamExt;
@@ -14,8 +15,14 @@ use tower_http::{
     trace::{DefaultMakeSpan, TraceLayer},
 };
 
+use crate::grid;
 
-async fn serve() {
+#[derive(Clone)]
+struct WebApiContext {
+    grids: Arc<[grid::Flut<u32>]>,
+}
+
+async fn serve(ctx: WebApiContext) {
     // diagnostics
     tracing_subscriber::registry()
         .with(
@@ -28,6 +35,7 @@ async fn serve() {
 
     let app = Router::new()
         .route("/imgstream", any(ws_handler))
+        .with_state(ctx)
         // logging middleware
         .layer(
             TraceLayer::new_for_http()
@@ -54,6 +62,7 @@ async fn ws_handler(
     ws: WebSocketUpgrade,
     user_agent: Option<TypedHeader<headers::UserAgent>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    State(ctx): State<WebApiContext>,
 ) -> impl IntoResponse {
     let user_agent = if let Some(TypedHeader(user_agent)) = user_agent {
         user_agent.to_string()
@@ -64,13 +73,13 @@ async fn ws_handler(
     
     // finalize the upgrade process by returning upgrade callback.
     // we can customize the callback by sending additional info such as address.
-    ws.on_upgrade(move |socket| img_stream(socket, addr))
+    ws.on_upgrade(move |socket| img_stream(ctx, socket, addr))
 }
 
-async fn img_stream(mut socket: WebSocket, who: SocketAddr) {
+async fn img_stream(ctx: WebApiContext, mut socket: WebSocket, who: SocketAddr) {
     let (mut sender, mut receiver) = socket.split();
     
-    while true {
+    loop {
         
     }
 }
