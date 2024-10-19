@@ -18,11 +18,11 @@ use tower_http::{
 use crate::grid;
 
 #[derive(Clone)]
-struct WebApiContext {
+pub struct WebApiContext {
     grids: Arc<[grid::Flut<u32>]>,
 }
 
-async fn serve(ctx: WebApiContext) {
+pub async fn serve(ctx: WebApiContext) {
     // diagnostics
     tracing_subscriber::registry()
         .with(
