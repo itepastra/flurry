@@ -1,8 +1,7 @@
 use std::{
-    collections::VecDeque, 
     convert::Infallible,
     fs::{create_dir_all, File},
-    io::{self},
+    io::{self, Write as _},
     path::Path,
     sync::Arc,
     time::Duration,
@@ -15,11 +14,9 @@ use flurry::{
     grid::{self, Flut},
     COUNTER,
 };
-use image::{codecs::jpeg::JpegEncoder, GenericImageView, SubImage};
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
+use tokio::{    
     net::TcpListener,
-    time::{interval, sleep, timeout, Instant},
+    time::interval
 };
 type Never = Infallible;
 

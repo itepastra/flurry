@@ -1,4 +1,4 @@
-use std::{cell::SyncUnsafeCell};
+use std::cell::SyncUnsafeCell;
 
 use image::{GenericImageView, Rgb};
 use tokio::sync::{RwLock, RwLockReadGuard};
