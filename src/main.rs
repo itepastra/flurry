@@ -1,15 +1,21 @@
 use std::{
-    collections::VecDeque, convert::Infallible, fs::{create_dir_all, File}, io::{self, Write}, path::Path, ptr::write_bytes, sync::Arc, time::Duration
+    collections::VecDeque, 
+    convert::Infallible,
+    fs::{create_dir_all, File},
+    io::{self},
+    path::Path,
+    sync::Arc,
+    time::Duration,
 };
 
 use chrono::Local;
-use debug_print::{debug_eprintln, debug_println};
 use flurry::{
     config::{GRID_LENGTH, HOST, IMAGE_SAVE_INTERVAL, JPEG_UPDATE_INTERVAL},
     flutclient::FlutClient,
     grid::{self, Flut},
     COUNTER,
 };
+use image::{codecs::jpeg::JpegEncoder, GenericImageView, SubImage};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
     net::TcpListener,
@@ -41,7 +47,6 @@ async fn save_image_frames(grids: Arc<[grid::Flut<u32>]>, duration: Duration) ->
         timer.tick().await;
         for grid in grids.as_ref() {
             let p = base_dir.join(format!("{}", Local::now().format("%Y-%m-%d_%H-%M-%S.jpg")));
-            debug_println!("timer ticked, grid writing to {:?}", p);
             let mut file_writer = File::create(p)?;
 
             file_writer.write_all(&grid.read_jpg_buffer().await)?;
