@@ -5,7 +5,7 @@ use std::{
 use chrono::Local;
 use debug_print::{debug_eprintln, debug_println};
 use flurry::{
-    config::{GRID_LENGTH, HOST, IMAGE_SAVE_INTERVAL},
+    config::{GRID_LENGTH, HOST, IMAGE_SAVE_INTERVAL, JPEG_UPDATE_INTERVAL},
     flutclient::FlutClient,
     grid::{self, Flut},
     COUNTER,
@@ -70,7 +70,7 @@ async fn handle_flut(flut_listener: TcpListener, grids: Arc<[grid::Flut<u32>]>) 
 }
 
 async fn jpeg_update_loop(grids: Arc<[Flut<u32>]>) -> io::Result<Never> {
-    let mut interval = interval(Duration::from_millis(20));
+    let mut interval = interval(JPEG_UPDATE_INTERVAL);
     loop {
         interval.tick().await;
         for grid in grids.as_ref() {
