@@ -1,21 +1,19 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use axum::{
-    extract::{ws::{Message, WebSocket, WebSocketUpgrade}, ConnectInfo},
+    extract::{ws::{Message, WebSocket, WebSocketUpgrade}, ConnectInfo, Query},
     response::IntoResponse,
     routing::any,
     Router,
     extract::State,
 };
 use axum_extra::TypedHeader;
-use futures::StreamExt;
+use futures::{SinkExt as _, StreamExt};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use tower_http::{
-    services::ServeDir,
-    trace::{DefaultMakeSpan, TraceLayer},
-};
+use tower_http::trace::{DefaultMakeSpan, TraceLayer};
+use serde::Deserialize;
 
-use crate::grid;
+use crate::{config::JPEG_UPDATE_INTERVAL, grid::{self, Flut}};
 
 #[derive(Clone)]
 pub struct WebApiContext {
@@ -34,7 +32,7 @@ pub async fn serve(ctx: WebApiContext) {
         .init();
 
     let app = Router::new()
-        .route("/imgstream", any(ws_handler))
+        .route("/imgstream", any(img_stream_ws_handler))
         .with_state(ctx)
         // logging middleware
         .layer(
@@ -57,12 +55,17 @@ pub async fn serve(ctx: WebApiContext) {
     .unwrap();
 }
 
+#[derive(Debug, Deserialize)]
+struct CanvasQuery {
+    canvas: u8,
+}
 
-async fn ws_handler(
+async fn img_stream_ws_handler(
     ws: WebSocketUpgrade,
     user_agent: Option<TypedHeader<headers::UserAgent>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(ctx): State<WebApiContext>,
+    Query(CanvasQuery { canvas }): Query<CanvasQuery>,
 ) -> impl IntoResponse {
     let user_agent = if let Some(TypedHeader(user_agent)) = user_agent {
         user_agent.to_string()
@@ -73,13 +76,23 @@ async fn ws_handler(
     
     // finalize the upgrade process by returning upgrade callback.
     // we can customize the callback by sending additional info such as address.
-    ws.on_upgrade(move |socket| img_stream(ctx, socket, addr))
+    ws.on_upgrade(move |socket| image_streamer(ctx, canvas, socket, addr))
 }
 
-async fn img_stream(ctx: WebApiContext, mut socket: WebSocket, who: SocketAddr) {
-    let (mut sender, mut receiver) = socket.split();
+async fn image_streamer(ctx: WebApiContext, canvas: u8, socket: WebSocket, who: SocketAddr) {
+    let (mut sender, _) = socket.split();
     
     loop {
-        
+        tokio::time::sleep(JPEG_UPDATE_INTERVAL).await;
+        let mut buf = Vec::new();
+        let jpgbuf = ctx.grids[canvas as usize].read_jpg_buffer().await.clone();
+        buf.extend_from_slice(&jpgbuf);
+        match sender.send(Message::Binary(buf)).await {
+            Ok(_) => (),
+            Err(e) => {
+                tracing::error!("Error sending image to {who}: {e}");
+                return;
+            }
+        }
     }
 }

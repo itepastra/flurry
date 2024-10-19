@@ -656,6 +656,7 @@ dependencies = [
  "headers",
  "image",
  "rand",
+ "serde",
  "tempfile",
  "test-case",
  "tokio",
