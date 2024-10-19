@@ -3,6 +3,7 @@ use std::time::Duration;
 pub const GRID_LENGTH: usize = 1;
 pub const HOST: &str = "0.0.0.0:7791";
 pub const IMAGE_SAVE_INTERVAL: Duration = Duration::from_secs(5);
+pub const JPEG_UPDATE_INTERVAL: Duration = Duration::from_millis(20);
 
 pub const HELP_TEXT: &[u8] = b"Flurry is a pixelflut implementation, this means you can use commands to get and set pixels in the canvas
 SIZE returns the size of the canvas
