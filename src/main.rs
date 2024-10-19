@@ -10,7 +10,6 @@ use flurry::{
     grid::{self, Flut},
     COUNTER,
 };
-use image::{codecs::jpeg::JpegEncoder, GenericImageView, SubImage};
 use tokio::{
     net::TcpListener,
     time::interval
@@ -40,19 +39,11 @@ async fn save_image_frames(grids: Arc<[grid::Flut<u32>]>, duration: Duration) ->
     loop {
         timer.tick().await;
         for grid in grids.as_ref() {
-            let p = base_dir.join(format!("{}", Local::now().format("%Y-%m-%d %H:%M:%S")));
+            let p = base_dir.join(format!("{}", Local::now().format("%Y-%m-%d_%H-%M-%S.jpg")));
             debug_println!("timer ticked, grid writing to {:?}", p);
             let mut file_writer = File::create(p)?;
 
-            let encoder = JpegEncoder::new_with_quality(&mut file_writer, 50);
-            grid.view(0, 0, grid.width(), grid.height()).to_image();
-
-            let sub_image = SubImage::new(grid, 0, 0, grid.width(), grid.height());
-            let image = sub_image.to_image();
-            match image.write_with_encoder(encoder) {
-                Ok(_) => {}
-                Err(err) => eprintln!("{}", err),
-            }
+            file_writer.write_all(&grid.read_jpg_buffer().await)?;
         }
     }
 }
