@@ -12,7 +12,7 @@ use debug_print::{debug_eprintln, debug_println};
 use flurry::{
     config::{GRID_LENGTH, HOST, IMAGE_SAVE_INTERVAL},
     flutclient::FlutClient,
-    grid::{self, Flut},
+    grid::{self, FlutGrid},
     COUNTER,
 };
 use image::{codecs::jpeg::JpegEncoder, GenericImageView, SubImage};
@@ -84,8 +84,8 @@ async fn handle_flut(flut_listener: TcpListener, grids: Arc<[grid::Flut<u32>]>) 
 #[tokio::main]
 #[allow(clippy::needless_return)]
 async fn main() {
+    let grids: Arc<[FlutGrid<u32>; GRID_LENGTH]> = [grid::FlutGrid::init(800, 600, 0xff_00_ff_ff)].into();
     println!("created grids");
-    let grids: Arc<[Flut<u32>; GRID_LENGTH]> = [grid::Flut::init(800, 600, 0xff_00_ff_ff)].into();
 
     let Ok(flut_listener) = TcpListener::bind(HOST).await else {
         eprintln!("Was unable to bind to {HOST}, please check if a different process is bound");

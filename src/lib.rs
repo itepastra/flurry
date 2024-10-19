@@ -22,7 +22,7 @@ pub type Coordinate = u16;
 pub static COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn set_pixel_rgba(
-    grids: &[grid::Flut<u32>],
+    grids: &[grid::FlutGrid<u32>],
     canvas: Canvas,
     x: Coordinate,
     y: Coordinate,
@@ -34,7 +34,7 @@ fn set_pixel_rgba(
 }
 
 fn get_pixel(
-    grids: &[grid::Flut<u32>],
+    grids: &[grid::FlutGrid<u32>],
     canvas: Canvas,
     x: Coordinate,
     y: Coordinate,

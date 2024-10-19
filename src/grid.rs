@@ -1,6 +1,7 @@
-use std::cell::SyncUnsafeCell;
+use std::{cell::SyncUnsafeCell};
 
 use image::{GenericImageView, Rgb};
+use tokio::sync::{RwLock, RwLockReadGuard};
 
 use crate::Coordinate;
 
@@ -11,22 +12,24 @@ pub trait Grid<I, V> {
     fn set(&self, x: I, y: I, value: V);
 }
 
-pub struct Flut<T> {
+pub struct FlutGrid<T> {
     size_x: usize,
     size_y: usize,
     cells: SyncUnsafeCell<Vec<T>>,
+    jpgbuf: RwLock<Vec<u8>>
 }
 
-impl<T: Clone> Flut<T> {
-    pub fn init(size_x: usize, size_y: usize, value: T) -> Flut<T> {
+impl<T: Clone> FlutGrid<T> {
+    pub fn init(size_x: usize, size_y: usize, value: T) -> FlutGrid<T> {
         let mut vec = Vec::with_capacity(size_x * size_y);
         for _ in 0..(size_x * size_y) {
             vec.push(value.clone());
         }
-        Flut {
+        FlutGrid {
             size_x,
             size_y,
             cells: vec.into(),
+            jpgbuf: RwLock::new(Vec::new())
         }
     }
 
@@ -35,7 +38,7 @@ impl<T: Clone> Flut<T> {
     }
 }
 
-impl<T> Flut<T> {
+impl<T> FlutGrid<T> {
     fn index(&self, x: Coordinate, y: Coordinate) -> Option<usize> {
         let x = x as usize;
         let y = y as usize;
@@ -44,9 +47,12 @@ impl<T> Flut<T> {
         }
         Some((y * self.size_x) + x)
     }
+    pub async fn read_jpg_buffer(&self) -> RwLockReadGuard<'_, Vec<u8>> {
+        self.jpgbuf.read().await
+    }
 }
 
-impl<T> Grid<Coordinate, T> for Flut<T> {
+impl<T> Grid<Coordinate, T> for FlutGrid<T> {
     fn get(&self, x: Coordinate, y: Coordinate) -> Option<&T> {
         self.index(x, y)
             .map(|idx| unsafe { &(*self.cells.get())[idx] })
@@ -65,7 +71,7 @@ impl<T> Grid<Coordinate, T> for Flut<T> {
     }
 }
 
-impl GenericImageView for Flut<u32> {
+impl GenericImageView for FlutGrid<u32> {
     type Pixel = Rgb<u8>;
 
     fn dimensions(&self) -> (u32, u32) {
@@ -78,24 +84,38 @@ impl GenericImageView for Flut<u32> {
         let [r, g, b, _a] = pixel.to_be_bytes();
         Rgb::from([r, g, b])
     }
+    
+}
+
+impl FlutGrid<u32> {
+    pub async fn update_jpg_buffer(&self) {
+        let mut jpgbuf = self.jpgbuf.write().await;
+        jpgbuf.clear();
+        let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut *jpgbuf, 50);
+        let subimage = self.view(0, 0, self.width(), self.height()).to_image();
+        match subimage.write_with_encoder(encoder) {
+            Ok(_) => {}
+            Err(err) => eprintln!("{}", err),
+        }           
+    }
 }
 
 #[cfg(test)]
 #[allow(clippy::needless_return)]
 mod tests {
-    use super::Flut;
+    use super::FlutGrid;
     use super::Grid;
 
     #[tokio::test]
     async fn test_grid_init_values() {
-        let grid = Flut::init(3, 3, 0);
+        let grid = FlutGrid::init(3, 3, 0);
 
         assert_eq!(grid.cells.into_inner(), vec![0, 0, 0, 0, 0, 0, 0, 0, 0]);
     }
 
     #[tokio::test]
     async fn test_grid_init_size() {
-        let grid = Flut::init(800, 600, 0);
+        let grid = FlutGrid::init(800, 600, 0);
 
         assert_eq!(grid.size_x, 800);
         assert_eq!(grid.size_y, 600);
@@ -103,7 +123,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_grid_set() {
-        let grid = Flut::init(3, 3, 0);
+        let grid = FlutGrid::init(3, 3, 0);
         grid.set(1, 1, 255);
         grid.set(2, 1, 256);
         assert_eq!(grid.cells.into_inner(), vec![0, 0, 0, 0, 255, 256, 0, 0, 0]);
@@ -111,7 +131,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_grid_set_out_of_range() {
-        let grid = Flut::init(3, 3, 0);
+        let grid = FlutGrid::init(3, 3, 0);
         grid.set(1, 1, 255);
         grid.set(3, 1, 256);
         assert_eq!(grid.cells.into_inner(), vec![0, 0, 0, 0, 255, 0, 0, 0, 0]);
@@ -119,14 +139,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_grid_get() {
-        let grid = Flut::init(3, 3, 0);
+        let grid = FlutGrid::init(3, 3, 0);
         grid.set(1, 2, 222);
         assert_eq!(grid.get(1, 2), Some(&222));
     }
 
     #[tokio::test]
     async fn test_grid_get_out_of_range() {
-        let grid = Flut::init(3, 3, 0);
+        let grid = FlutGrid::init(3, 3, 0);
         grid.set(3, 1, 256);
         assert_eq!(grid.get(3, 1), None);
         assert_eq!(grid.get(1, 2), Some(&0));
