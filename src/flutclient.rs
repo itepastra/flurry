@@ -9,16 +9,22 @@ use crate::{
     get_pixel,
     grid::{self, Flut},
     increment_counter,
-    protocols::{BinaryParser, IOProtocol, Parser, Responder, TextParser},
-    set_pixel_rgba, Canvas, Color, Command, Coordinate, Protocol, Response,
+    protocols::{BinaryParser, IOProtocol, Parser, Responder, StateParser, TextParser},
+    set_pixel_rgba, Canvas, Color, Command, Coordinate, Response,
 };
 
+#[macro_export]
 macro_rules! build_parser_type_enum {
-    ($($name:ident: $t:ty,)*) => {
+    ($($name:ident: $t:ident => $switch:expr,)*) => {
 
         #[derive(Clone)]
         enum ParserTypes {
             $($name($t),)*
+        }
+
+        #[derive(Debug, PartialEq)]
+        pub(crate) enum Protocol {
+            $($name,)*
         }
 
         macro_rules! match_parser {
@@ -30,12 +36,36 @@ macro_rules! build_parser_type_enum {
                 }
             )
         }
+
+        macro_rules! match_protocol {
+            ($protocol:ident => $pident:expr) => (
+                match $protocol {
+                    $(
+                        Protocol::$name => $pident = ParserTypes::$name($t::default()),
+                    )*
+                }
+            )
+        }
+
+        #[macro_export]
+        macro_rules! match_change {
+        ($protocol:ident) => (
+            match $protocol {
+            $(
+                $switch => Ok(Command::ChangeProtocol(Protocol::$name)),
+            )*
+            _ => Err(Error::from(ErrorKind::InvalidInput)),
+            }
+        )}
+
+        pub use match_change as match_protocols;
     };
 }
 
 build_parser_type_enum! {
-    TextParser: TextParser,
-    BinaryParser: BinaryParser,
+    Text: TextParser => "text",
+    Binary: BinaryParser => "binary",
+    Stateful: StateParser => "stateful",
 }
 
 pub struct FlutClient<R, W>
@@ -105,10 +135,7 @@ where
     }
 
     fn change_protocol(&mut self, protocol: &Protocol) {
-        match protocol {
-            Protocol::Text => self.parser = ParserTypes::TextParser(TextParser::default()),
-            Protocol::Binary => self.parser = ParserTypes::BinaryParser(BinaryParser::default()),
-        }
+        match_protocol! {protocol => self.parser}
     }
 
     pub fn new(reader: R, writer: W, grids: Arc<[grid::Flut<u32>]>) -> Self {
@@ -116,7 +143,7 @@ where
             reader: BufReader::new(reader),
             writer: BufWriter::new(writer),
             grids,
-            parser: ParserTypes::TextParser(TextParser::default()),
+            parser: ParserTypes::Text(TextParser::default()),
             counter: 0,
         }
     }
@@ -126,8 +153,7 @@ where
             match_parser!(parser: &self.parser.clone() => 'outer: loop {
                 for _ in 0..1000 {
                     let parsed = parser.parse(&mut self.reader).await;
-                    match parsed {
-                        Ok(Command::Help) => self.help_command().await?,
+                    match parsed { Ok(Command::Help) => self.help_command().await?,
                         Ok(Command::Size(canvas)) => self.size_command(canvas).await?,
                         Ok(Command::GetPixel(canvas, x, y)) => self.get_pixel_command(canvas, x, y).await?,
                         Ok(Command::SetPixel(canvas, x, y, color)) => self.set_pixel_command(canvas, x, y, &color),
@@ -138,6 +164,13 @@ where
                         Ok(Command::ChangeProtocol(protocol)) => {
                             self.change_protocol(&protocol);
                             break 'outer;
+                        }
+                        Ok(Command::Multiple(commands)) => {
+                            for cmd in commands {
+                                match cmd {
+                                    crate::LockableCommand::SetPixel(canvas, x, y, color) => self.set_pixel_command(canvas, x, y, &color),
+                                }
+                            }
                         }
                         Err(err) if err.kind() == ErrorKind::UnexpectedEof => {
                 increment_counter(self.counter);
