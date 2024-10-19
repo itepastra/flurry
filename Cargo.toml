@@ -6,21 +6,13 @@ edition = "2021"
 [dependencies]
 async-trait = "0.1.83"
 atoi_radix10 = "0.0.1"
-axum = { version = "0.7.7", features = ["ws"] }
-axum-extra = { version = "0.9.4", features = ["typed-header"] }
 bytes = "1.6.0"
 chrono = "0.4.38"
 debug_print = "1.0.0"
-futures = "0.3.31"
-futures-util = { version = "0.3.31", features = ["sink", "std"] }
-headers = "0.4.0"
 image = "0.25.2"
 rand = "*"
 tokio = { version = "1.38", features = ["full"] }
 tokio-test = "*"
-tower-http = { version = "0.6.1", features = ["fs", "trace"] }
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 
 [dev-dependencies]
 tempfile = "*"
