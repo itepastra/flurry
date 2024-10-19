@@ -37,13 +37,17 @@
                 src = pkgs.lib.cleanSource ./.;
               };
           });
-      devShell = forAllSystems ({ system, pkgs, ... }:
+      devShell = forAllSystems ({ system, pkgs, fpkgs }:
+        let
+          ffpkgs = fpkgs.complete;
+        in
         pkgs.mkShell {
           buildInputs = [
-            pkgs.rustup
-            pkgs.wgo
-            pkgs.cargo-flamegraph
-            pkgs.cargo-udeps
+            ffpkgs.cargo
+            ffpkgs.clippy
+            ffpkgs.rust-src
+            ffpkgs.rustc
+            ffpkgs.rustfmt
           ];
         });
     };
