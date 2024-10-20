@@ -7,7 +7,7 @@
     };
   };
 
-  outputs = { self, fenix, nixpkgs, ... }:
+  outputs = { fenix, nixpkgs, ... }:
     let
       allSystems = [
         "x86_64-linux" # 64-bit Intel/AMD Linux
@@ -23,7 +23,7 @@
     in
     {
       packages = forAllSystems
-        ({ system, pkgs, fpkgs }:
+        ({ pkgs, fpkgs, ... }:
           let
             toolchain = fpkgs.minimal.toolchain;
           in
@@ -38,7 +38,7 @@
               };
           });
       devShells = forAllSystems
-        ({ system, pkgs, fpkgs }:
+        ({ pkgs, fpkgs, ... }:
           let
             ffpkgs = fpkgs.complete;
           in
