@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{error::Error, net::SocketAddr, sync::Arc};
 
 use axum::{
     extract::{ws::{Message, WebSocket, WebSocketUpgrade}, ConnectInfo, Query},
@@ -8,29 +8,19 @@ use axum::{
     extract::State,
 };
 use axum_extra::TypedHeader;
-use futures::{SinkExt as _, StreamExt};
+use futures::{never::Never, SinkExt as _, StreamExt};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use serde::Deserialize;
 
-use crate::{config::JPEG_UPDATE_INTERVAL, grid::{self, Flut}};
+use crate::{config::JPEG_UPDATE_INTERVAL, grid, AsyncResult};
 
 #[derive(Clone)]
 pub struct WebApiContext {
-    grids: Arc<[grid::Flut<u32>]>,
+    pub grids: Arc<[grid::Flut<u32>]>,
 }
 
-pub async fn serve(ctx: WebApiContext) {
-    // diagnostics
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                format!("{}=debug,tower_http=debug", env!("CARGO_CRATE_NAME")).into()
-            }),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .init();
-
+pub async fn serve(ctx: WebApiContext) -> AsyncResult<Never> {
     let app = Router::new()
         .route("/imgstream", any(img_stream_ws_handler))
         .with_state(ctx)
@@ -53,6 +43,8 @@ pub async fn serve(ctx: WebApiContext) {
     )
     .await
     .unwrap();
+
+    Err("Web api exited".into())
 }
 
 #[derive(Debug, Deserialize)]
@@ -72,7 +64,7 @@ async fn img_stream_ws_handler(
     } else {
         String::from("Unknown browser")
     };
-    println!("`{user_agent}` at {addr} connected.");
+    tracing::info!("`{user_agent}` at {addr} connected.");
     
     // finalize the upgrade process by returning upgrade callback.
     // we can customize the callback by sending additional info such as address.

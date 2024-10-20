@@ -91,11 +91,12 @@ impl Flut<u32> {
     pub async fn update_jpg_buffer(&self) {
         let mut jpgbuf = self.jpgbuf.write().await;
         jpgbuf.clear();
+        tracing::debug!("length: {}", jpgbuf.len());
         let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut *jpgbuf, 50);
         let subimage = self.view(0, 0, self.width(), self.height()).to_image();
         match subimage.write_with_encoder(encoder) {
             Ok(_) => {}
-            Err(err) => eprintln!("{}", err),
+            Err(err) => tracing::error!("Error writing jpeg buffer: {:?}", err),
         }           
     }
 }

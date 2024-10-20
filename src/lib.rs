@@ -21,6 +21,8 @@ pub type Coordinate = u16;
 
 pub static COUNTER: AtomicU64 = AtomicU64::new(0);
 
+pub type AsyncResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
+
 fn set_pixel_rgba(
     grids: &[grid::Flut<u32>],
     canvas: Canvas,
