@@ -10,6 +10,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      - name: Check flake
+        uses: DeterminateSystems/flake-checker-action@main
       - name: Update Nix Flake Lock
         uses: DeterminateSystems/update-flake-lock@main
         with:
