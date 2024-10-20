@@ -1,0 +1,17 @@
+name: update-flake-lock
+on:
+  workflow_dispatch: # allows manual triggering
+  schedule:
+    - cron: '0 4 * * *' # at 04:00 every day
+
+jobs:
+  lockfile:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Update Nix Flake Lock
+        uses: DeterminateSystems/update-flake-lock@v24
+        with:
+          pr-assignees: itepastra
+          pr-reviewers: itepastra
