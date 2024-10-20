@@ -4,7 +4,7 @@ on:
   push:
 jobs:
   tests:
-    runs-on: flurry-runner
+    runs-on: [self-hosted,flurry-runner]
     steps:
     - uses: actions/checkout@v4
     - uses: cachix/install-nix-action@v27
