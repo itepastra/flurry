@@ -10,8 +10,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      - name: Enable magic Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+      - name: Check flake
+        uses: DeterminateSystems/flake-checker-action@main
       - name: Update Nix Flake Lock
         uses: DeterminateSystems/update-flake-lock@main
         with:
           pr-title: "flake: update flake.lock"
           pr-reviewers: itepastra
+          token: ${{ secrets.GH_TOKEN_FOR_UPDATES }}
