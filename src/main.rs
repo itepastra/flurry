@@ -1,9 +1,5 @@
 use std::{
-    fs::{create_dir_all, File}, 
-    io::Write as _, 
-    path::Path, 
-    sync::Arc, 
-    time::Duration
+    fs::{create_dir_all, File}, future::IntoFuture, io::Write as _, path::Path, sync::Arc, time::Duration
 };
 
 use chrono::Local;
@@ -119,6 +115,11 @@ async fn main() {
         ];
         
     for handle in handles {
-        tokio::select! {}
+        handle.1.into_future().then(|res| {
+            if let Err(err) = res {
+                tracing::error!("Error in {}: {err}", handle.0);
+            }
+            futures::future::ready(())
+        }).await;
     }
 }
