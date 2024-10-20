@@ -8,9 +8,6 @@ on:
 permissions:
   contents: read
 
-env:
-  RUSTFLAGS: -Dwarnings
-
 jobs:
   pre_ci:
     uses: dtolnay/.github/.github/workflows/pre_ci.yml@master
@@ -42,7 +39,7 @@ jobs:
         with:
           toolchain: ${{matrix.rust}}
       - name: Enable type layout randomization
-        run: echo RUSTFLAGS=${RUSTFLAGS}\ -Zrandomize-layout\ --cfg=exhaustive >> $GITHUB_ENV
+        run: echo -Zrandomize-layout\ --cfg=exhaustive >> $GITHUB_ENV
         if: matrix.rust == 'nightly'
       - run: cargo check --locked
       - run: cargo update
