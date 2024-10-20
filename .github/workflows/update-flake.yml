@@ -19,4 +19,3 @@ jobs:
         with:
           pr-title: "flake: update flake.lock"
           pr-reviewers: itepastra
-          token: ${{ secrets.GH_TOKEN_FOR_UPDATES }}
