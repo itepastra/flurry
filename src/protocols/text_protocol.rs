@@ -4,6 +4,7 @@ use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWriteExt};
 
 use crate::{
     config::{GRID_LENGTH, HELP_TEXT},
+    flutclient::match_protocols,
     Canvas, Color, Command, Coordinate, Protocol, Response,
 };
 
@@ -103,11 +104,7 @@ impl TextParser {
 
         let _command = split.next().ok_or(Error::from(ErrorKind::InvalidInput))?;
         let protocol = split.next().ok_or(Error::from(ErrorKind::InvalidInput))?;
-        match protocol {
-            "binary" => Ok(Command::ChangeProtocol(Protocol::Binary)),
-            "text" => Ok(Command::ChangeProtocol(Protocol::Text)),
-            _ => Err(Error::from(ErrorKind::InvalidInput)),
-        }
+        match_protocols!(protocol)
     }
 }
 

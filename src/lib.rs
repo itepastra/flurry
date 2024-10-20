@@ -5,6 +5,7 @@
 use std::sync::atomic::AtomicU64;
 
 pub use color::Color;
+use flutclient::Protocol;
 use grid::Grid;
 
 pub mod config;
@@ -50,23 +51,23 @@ fn increment_counter(amount: u64) {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Protocol {
-    Text,
-    Binary,
+pub(crate) enum LockableCommand {
+    SetPixel(Canvas, Coordinate, Coordinate, Color),
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Command {
+pub(crate) enum Command {
     Help,
     Size(Canvas),
     GetPixel(Canvas, Coordinate, Coordinate),
     SetPixel(Canvas, Coordinate, Coordinate, Color),
     ChangeCanvas(Canvas),
     ChangeProtocol(Protocol),
+    Multiple(Vec<LockableCommand>),
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Response {
+pub(crate) enum Response {
     Help,
     Size(Coordinate, Coordinate),
     GetPixel(Coordinate, Coordinate, [u8; 3]),

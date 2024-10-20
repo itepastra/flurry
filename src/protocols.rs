@@ -1,9 +1,11 @@
 mod binary_protocol;
+mod stateful;
 mod text_protocol;
 
 use std::io;
 
 pub use binary_protocol::BinaryParser;
+pub use stateful::StateParser;
 pub use text_protocol::TextParser;
 use tokio::io::AsyncWriteExt;
 
