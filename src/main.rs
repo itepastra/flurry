@@ -1,26 +1,22 @@
 use std::{
-    fs::{create_dir_all, File}, future::IntoFuture, io::Write as _, path::Path, sync::Arc, time::Duration
+    fs::{create_dir_all, File},
+    future::IntoFuture,
+    io::Write as _,
+    path::Path,
+    sync::Arc,
+    time::Duration,
 };
 
 use chrono::Local;
 use flurry::{
-    config::{
-        GRID_LENGTH, 
-        HOST, 
-        IMAGE_SAVE_INTERVAL, 
-        JPEG_UPDATE_INTERVAL
-    }, 
-    flutclient::FlutClient, 
-    grid::{self, Flut}, 
-    webapi::WebApiContext, 
-    AsyncResult, 
-    COUNTER
+    config::{GRID_LENGTH, HOST, IMAGE_SAVE_INTERVAL, JPEG_UPDATE_INTERVAL},
+    flutclient::FlutClient,
+    grid::{self, Flut},
+    webapi::WebApiContext,
+    AsyncResult, COUNTER,
 };
 use futures::{never::Never, FutureExt};
-use tokio::{
-    net::TcpListener,
-    time::interval
-};
+use tokio::{net::TcpListener, time::interval};
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 
 /// This function logs the current amount of changed pixels to stdout every second
@@ -39,7 +35,10 @@ async fn pixel_change_stdout_log() -> AsyncResult<Never> {
 /// # Errors
 ///
 /// This function will return an error if it is unable to create or write to the file for the image
-async fn save_image_frames(grids: Arc<[grid::Flut<u32>]>, duration: Duration) -> AsyncResult<Never> {
+async fn save_image_frames(
+    grids: Arc<[grid::Flut<u32>; GRID_LENGTH]>,
+    duration: Duration,
+) -> AsyncResult<Never> {
     let base_dir = Path::new("./recordings");
     let mut timer = interval(duration);
     create_dir_all(base_dir)?;
@@ -49,7 +48,7 @@ async fn save_image_frames(grids: Arc<[grid::Flut<u32>]>, duration: Duration) ->
             let p = base_dir.join(format!("{}", Local::now().format("%Y-%m-%d_%H-%M-%S.jpg")));
             let mut file_writer = File::create(p)?;
 
-            file_writer.write_all(&grid.read_jpg_buffer().await)?;
+            file_writer.write_all(&grid.read_jpg_buffer())?;
         }
     }
 }
@@ -57,7 +56,10 @@ async fn save_image_frames(grids: Arc<[grid::Flut<u32>]>, duration: Duration) ->
 /// Handle connections made to the socket, keeps a vec of the currently active connections,
 /// uses timeout to loop through them and clean them up to stop a memory leak while not throwing
 /// everything away
-async fn handle_flut(flut_listener: TcpListener, grids: Arc<[grid::Flut<u32>]>) -> AsyncResult<Never> {
+async fn handle_flut(
+    flut_listener: TcpListener,
+    grids: Arc<[grid::Flut<u32>]>,
+) -> AsyncResult<Never> {
     let mut handles = Vec::new();
     loop {
         let (mut socket, _) = flut_listener.accept().await?;
@@ -79,7 +81,7 @@ async fn jpeg_update_loop(grids: Arc<[Flut<u32>]>) -> AsyncResult<Never> {
     loop {
         interval.tick().await;
         for grid in grids.as_ref() {
-            grid.update_jpg_buffer().await;
+            grid.update_jpg_buffer();
         }
     }
 }
@@ -89,37 +91,57 @@ async fn jpeg_update_loop(grids: Arc<[Flut<u32>]>) -> AsyncResult<Never> {
 async fn main() {
     // diagnostics
     tracing_subscriber::registry()
-    .with(
-        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-            format!("{}=debug,tower_http=debug", env!("CARGO_CRATE_NAME")).into()
-        }),
-    )
-    .with(tracing_subscriber::fmt::layer())
-    .init();
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                format!("{}=debug,tower_http=debug", env!("CARGO_CRATE_NAME")).into()
+            }),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
 
     let grids: Arc<[Flut<u32>; GRID_LENGTH]> = [grid::Flut::init(800, 600, 0xff_00_ff_ff)].into();
     tracing::trace!("created grids");
-    
+
     let Ok(flut_listener) = TcpListener::bind(HOST).await else {
-        tracing::error!("Was unable to bind to {HOST}, please check if a different process is bound");
+        tracing::error!(
+            "Was unable to bind to {HOST}, please check if a different process is bound"
+        );
         return;
     };
     tracing::info!("Started TCP listener on {HOST}");
-    
+
     let handles = vec![
         ("pixel-logger", tokio::spawn(pixel_change_stdout_log())),
-        ("snapshots", tokio::spawn(save_image_frames(grids.clone(), IMAGE_SAVE_INTERVAL))),
-        ("pixelflut-server", tokio::spawn(handle_flut(flut_listener, grids.clone()))),
-        ("jpeg-update-loop", tokio::spawn(jpeg_update_loop(grids.clone()))),
-        ("web-api", tokio::spawn(flurry::webapi::serve(WebApiContext { grids: grids.clone() }))),
-        ];
-        
+        (
+            "snapshots",
+            tokio::spawn(save_image_frames(grids.clone(), IMAGE_SAVE_INTERVAL)),
+        ),
+        (
+            "pixelflut-server",
+            tokio::spawn(handle_flut(flut_listener, grids.clone())),
+        ),
+        (
+            "jpeg-update-loop",
+            tokio::spawn(jpeg_update_loop(grids.clone())),
+        ),
+        (
+            "web-api",
+            tokio::spawn(flurry::webapi::serve(WebApiContext {
+                grids: grids.clone(),
+            })),
+        ),
+    ];
+
     for handle in handles {
-        handle.1.into_future().then(|res| {
-            if let Err(err) = res {
-                tracing::error!("Error in {}: {err}", handle.0);
-            }
-            futures::future::ready(())
-        }).await;
+        handle
+            .1
+            .into_future()
+            .then(|res| {
+                if let Err(err) = res {
+                    tracing::error!("Error in {}: {err}", handle.0);
+                }
+                futures::future::ready(())
+            })
+            .await;
     }
 }

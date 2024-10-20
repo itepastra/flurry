@@ -1,7 +1,9 @@
-use std::cell::SyncUnsafeCell;
+use std::{
+    cell::SyncUnsafeCell,
+    sync::{RwLock, RwLockReadGuard},
+};
 
 use image::{GenericImageView, Rgb};
-use tokio::sync::{RwLock, RwLockReadGuard};
 
 use crate::Coordinate;
 
@@ -16,7 +18,7 @@ pub struct Flut<T> {
     size_x: usize,
     size_y: usize,
     cells: SyncUnsafeCell<Vec<T>>,
-    jpgbuf: RwLock<Vec<u8>>
+    jpgbuf: RwLock<Vec<u8>>,
 }
 
 impl<T: Clone> Flut<T> {
@@ -29,7 +31,7 @@ impl<T: Clone> Flut<T> {
             size_x,
             size_y,
             cells: vec.into(),
-            jpgbuf: RwLock::new(Vec::new())
+            jpgbuf: RwLock::new(Vec::new()),
         }
     }
 
@@ -47,8 +49,8 @@ impl<T> Flut<T> {
         }
         Some((y * self.size_x) + x)
     }
-    pub async fn read_jpg_buffer(&self) -> RwLockReadGuard<'_, Vec<u8>> {
-        self.jpgbuf.read().await
+    pub fn read_jpg_buffer(&self) -> RwLockReadGuard<'_, Vec<u8>> {
+        self.jpgbuf.read().expect("RWlock didn't exit nicely")
     }
 }
 
@@ -84,20 +86,18 @@ impl GenericImageView for Flut<u32> {
         let [r, g, b, _a] = pixel.to_be_bytes();
         Rgb::from([r, g, b])
     }
-    
 }
 
 impl Flut<u32> {
-    pub async fn update_jpg_buffer(&self) {
-        let mut jpgbuf = self.jpgbuf.write().await;
+    pub fn update_jpg_buffer(&self) {
+        let mut jpgbuf = self.jpgbuf.write().expect("Could not get write RWlock");
         jpgbuf.clear();
-        tracing::debug!("length: {}", jpgbuf.len());
         let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut *jpgbuf, 50);
         let subimage = self.view(0, 0, self.width(), self.height()).to_image();
         match subimage.write_with_encoder(encoder) {
             Ok(_) => {}
             Err(err) => tracing::error!("Error writing jpeg buffer: {:?}", err),
-        }           
+        }
     }
 }
 

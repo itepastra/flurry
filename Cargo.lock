@@ -244,6 +244,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "axum-streams"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef49936ad8fd9750be8bb5c75f64b19bd407027c5c9e89c42e0939122d162d67"
+dependencies = [
+ "axum",
+ "bytes",
+ "futures",
+ "http",
+ "http-body",
+ "mime",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+]
+
+[[package]]
 name = "backtrace"
 version = "0.3.74"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -647,6 +664,7 @@ dependencies = [
  "atoi_radix10",
  "axum",
  "axum-extra",
+ "axum-streams",
  "bytes",
  "chrono",
  "criterion",
@@ -660,6 +678,7 @@ dependencies = [
  "tempfile",
  "test-case",
  "tokio",
+ "tokio-stream",
  "tokio-test",
  "tower-http",
  "tracing",

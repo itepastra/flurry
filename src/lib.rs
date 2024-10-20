@@ -11,6 +11,7 @@ pub mod config;
 pub mod flutclient;
 pub mod grid;
 pub mod protocols;
+pub(crate) mod stream;
 pub mod utils;
 pub mod webapi;
 
