@@ -3,6 +3,7 @@ use std::{
     future::IntoFuture,
     io::Write as _,
     path::Path,
+    process::exit,
     sync::Arc,
     time::Duration,
 };
@@ -16,7 +17,7 @@ use flurry::{
     AsyncResult, COUNTER,
 };
 use futures::{never::Never, FutureExt};
-use tokio::{net::TcpListener, time::interval};
+use tokio::{join, net::TcpListener, select, time::interval, try_join};
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 
 /// This function logs the current amount of changed pixels to stdout every second
@@ -106,42 +107,23 @@ async fn main() {
         tracing::error!(
             "Was unable to bind to {HOST}, please check if a different process is bound"
         );
-        return;
+        exit(1);
     };
     tracing::info!("Started TCP listener on {HOST}");
 
-    let handles = vec![
-        ("pixel-logger", tokio::spawn(pixel_change_stdout_log())),
-        (
-            "snapshots",
-            tokio::spawn(save_image_frames(grids.clone(), IMAGE_SAVE_INTERVAL)),
-        ),
-        (
-            "pixelflut-server",
-            tokio::spawn(handle_flut(flut_listener, grids.clone())),
-        ),
-        (
-            "jpeg-update-loop",
-            tokio::spawn(jpeg_update_loop(grids.clone())),
-        ),
-        (
-            "web-api",
-            tokio::spawn(flurry::webapi::serve(WebApiContext {
-                grids: grids.clone(),
-            })),
-        ),
-    ];
+    let pixel_logger = tokio::spawn(pixel_change_stdout_log());
+    let snapshots = tokio::spawn(save_image_frames(grids.clone(), IMAGE_SAVE_INTERVAL));
+    let pixelflut_server = tokio::spawn(handle_flut(flut_listener, grids.clone()));
+    let jpeg_update_loop = tokio::spawn(jpeg_update_loop(grids.clone()));
+    let website = tokio::spawn(flurry::webapi::serve(WebApiContext {
+        grids: grids.clone(),
+    }));
 
-    for handle in handles {
-        handle
-            .1
-            .into_future()
-            .then(|res| {
-                if let Err(err) = res {
-                    tracing::error!("Error in {}: {err}", handle.0);
-                }
-                futures::future::ready(())
-            })
-            .await;
-    }
+    let res = try_join! {
+        pixel_logger.then(|res| if let Err(err) = res { tracing::error!("Error in pixel count logger: {err}")}),
+        snapshots.then(|res| if let Err(err) = res { tracing::error!("Error in periodic snapshots: {err}")}),
+        pixelflut_server.then(|res| if let Err(err) = res { tracing::error!("Error in pixelflut server: {err}")}),
+        jpeg_update_loop.then(|res| if let Err(err) = res { tracing::error!("Error in jpeg encoding loop: {err}")}),
+        website.then(|res| if let Err(err) = res { tracing::error!("Error in website: {err}")}),
+    };
 }

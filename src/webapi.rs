@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, process::exit, sync::Arc};
 
 use axum::{
     extract::{ConnectInfo, Query, State},
@@ -11,9 +11,15 @@ use axum_extra::TypedHeader;
 use axum_streams::StreamBodyAs;
 use futures::{never::Never, stream::repeat_with, Stream};
 use serde::Deserialize;
+use tokio::net::TcpListener;
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 
-use crate::{config::JPEG_UPDATE_INTERVAL, grid, stream::Multipart, AsyncResult};
+use crate::{
+    config::{WEB_HOST, WEB_UPDATE_INTERVAL},
+    grid,
+    stream::Multipart,
+    AsyncResult,
+};
 
 #[derive(Clone)]
 pub struct WebApiContext {
@@ -31,18 +37,20 @@ pub async fn serve(ctx: WebApiContext) -> AsyncResult<Never> {
         );
 
     // run it with hyper
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
-        .await
-        .unwrap();
+    let Ok(listener) = TcpListener::bind(WEB_HOST).await else {
+        tracing::error!(
+            "Was unable to bind to {WEB_HOST}, please check if a different process is bound"
+        );
+        exit(1);
+    };
 
-    tracing::debug!("listening on {}", listener.local_addr().unwrap());
+    tracing::debug!("listening on {}", listener.local_addr()?);
 
     axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )
-    .await
-    .unwrap();
+    .await?;
 
     Err("Web api exited".into())
 }
@@ -63,7 +71,7 @@ fn make_image_stream(
         buf.extend_from_slice(&ctx.grids[canvas as usize].read_jpg_buffer());
         Ok(buf.clone())
     })
-    .throttle(JPEG_UPDATE_INTERVAL)
+    .throttle(WEB_UPDATE_INTERVAL)
 }
 
 async fn image_stream(
