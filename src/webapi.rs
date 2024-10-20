@@ -2,7 +2,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use axum::{
     extract::{ConnectInfo, Query, State},
-    http::{self, HeaderMap, HeaderName, HeaderValue},
+    http::{self, HeaderMap, HeaderValue},
     response::IntoResponse,
     routing::any,
     Router,
@@ -60,7 +60,7 @@ fn make_image_stream(
     let mut buf = Vec::new();
     repeat_with(move || {
         buf.clear();
-        buf.extend_from_slice(&(&ctx.grids[canvas as usize]).read_jpg_buffer());
+        buf.extend_from_slice(&ctx.grids[canvas as usize].read_jpg_buffer());
         Ok(buf.clone())
     })
     .throttle(JPEG_UPDATE_INTERVAL)
