@@ -56,7 +56,6 @@ where
     W: AsyncWriteExt + std::marker::Unpin,
 {
     async fn help_command(&mut self) -> io::Result<()> {
-        println!("HELP wanted");
         match_parser!(parser: self.parser => parser.unparse(Response::Help, &mut self.writer).await?);
 
         self.writer.flush().await?;
