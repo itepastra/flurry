@@ -1,13 +1,13 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/master";
     fenix = {
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
-  outputs = { self, fenix, nixpkgs, ... }:
+  outputs = { fenix, nixpkgs, ... }:
     let
       allSystems = [
         "x86_64-linux" # 64-bit Intel/AMD Linux
@@ -23,7 +23,7 @@
     in
     {
       packages = forAllSystems
-        ({ system, pkgs, fpkgs }:
+        ({ pkgs, fpkgs, ... }:
           let
             toolchain = fpkgs.minimal.toolchain;
           in
@@ -37,19 +37,24 @@
                 src = pkgs.lib.cleanSource ./.;
               };
           });
-      devShell = forAllSystems ({ system, pkgs, fpkgs }:
-        let
-          ffpkgs = fpkgs.complete;
-        in
-        pkgs.mkShell {
-          buildInputs = [
-            ffpkgs.cargo
-            ffpkgs.clippy
-            ffpkgs.rust-src
-            ffpkgs.rustc
-            ffpkgs.rustfmt
-          ];
-        });
+      devShells = forAllSystems
+        ({ pkgs, fpkgs, ... }:
+          let
+            ffpkgs = fpkgs.complete;
+          in
+          {
+            default = pkgs.mkShell
+              {
+                buildInputs = [
+                  ffpkgs.cargo
+                  ffpkgs.clippy
+                  ffpkgs.rust-src
+                  ffpkgs.rustc
+                  ffpkgs.rustfmt
+                  pkgs.wgo
+                ];
+              };
+          });
     };
 }
 
