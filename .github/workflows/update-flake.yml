@@ -10,8 +10,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Enable magic Nix cache
-        uses: DeterminateSystems/magic-nix-cache-action@main
       - name: Check flake
         uses: DeterminateSystems/flake-checker-action@main
       - name: Update Nix Flake Lock
