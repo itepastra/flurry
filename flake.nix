@@ -7,7 +7,7 @@
     };
   };
 
-  outputs = { fenix, nixpkgs, ... }:
+  outputs = { self, fenix, nixpkgs, ... }:
     let
       allSystems = [
         "x86_64-linux" # 64-bit Intel/AMD Linux
@@ -55,6 +55,10 @@
                 ];
               };
           });
+      hydraJobs = {
+        devShell.x86_64-linux = self.devShells.x86_64-linux.default;
+        flurry.x86_64-linux = self.packages.x86_64-linux.flurry;
+      };
     };
 }
 
