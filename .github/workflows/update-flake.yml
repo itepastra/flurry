@@ -17,3 +17,5 @@ jobs:
         with:
           pr-title: "flake: update flake.lock"
           pr-reviewers: itepastra
+      - run: nix build
+      - run: nix flake check
