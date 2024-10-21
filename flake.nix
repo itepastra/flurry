@@ -26,16 +26,30 @@
         ({ pkgs, fpkgs, ... }:
           let
             toolchain = fpkgs.minimal.toolchain;
+            fs = pkgs.lib.fileset;
           in
           rec {
             default = flurry;
             flurry =
-              (pkgs.makeRustPlatform { cargo = toolchain; rustc = toolchain; }).buildRustPackage {
-                pname = "flurry";
-                version = "0.1.0";
-                cargoLock.lockFile = ./Cargo.lock;
-                src = pkgs.lib.cleanSource ./.;
-              };
+              (pkgs.makeRustPlatform { cargo = toolchain; rustc = toolchain; }).buildRustPackage
+                {
+                  pname = "flurry";
+                  version = "0.1.0";
+                  cargoLock.lockFile = ./Cargo.lock;
+                  src = fs.toSource {
+                    root = ./.;
+                    fileset = fs.difference ./.
+                      (fs.unions [
+                        (fs.maybeMissing ./result)
+                        ./.gitignore
+                        ./.github
+                        (fs.maybeMissing ./.envrc)
+                        (fs.maybeMissing ./.direnv)
+                        (fs.maybeMissing ./target)
+                        (fs.maybeMissing ./recordings)
+                      ]);
+                  };
+                };
           });
       devShells = forAllSystems
         ({ pkgs, fpkgs, ... }:
