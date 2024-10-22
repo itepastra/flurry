@@ -40,15 +40,13 @@
                   fileset = fs.unions [
                     ./Cargo.lock
                     ./Cargo.toml
-                    ./flake.nix
-                    ./flake.lock
                     ./src
                   ];
                 };
               };
           });
       devShells = forAllSystems
-        ({ pkgs, fpkgs, ... }:
+        ({ pkgs, fpkgs, system, ... }:
           let
             ffpkgs = fpkgs.complete;
           in
