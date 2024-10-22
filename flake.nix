@@ -5,9 +5,12 @@
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    tsunami = {
+      url = "github:itepastra/tsunami";
+    };
   };
 
-  outputs = { self, fenix, nixpkgs, ... }:
+  outputs = { self, fenix, nixpkgs, tsunami, ... }:
     let
       allSystems = [
         "x86_64-linux" # 64-bit Intel/AMD Linux
@@ -17,6 +20,7 @@
       ];
       forAllSystems = f: nixpkgs.lib.genAttrs allSystems (system: f {
         inherit system;
+        inherit tsunami;
         pkgs = import nixpkgs { inherit system; };
         fpkgs = import fenix { inherit system; };
       });
@@ -61,6 +65,7 @@
                   ffpkgs.rustfmt
                   pkgs.wgo
                   self.packages.${system}.flurry
+                  tsunami.packages.${system}.tsunami
                 ];
               };
           });
