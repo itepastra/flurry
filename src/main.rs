@@ -9,14 +9,19 @@ use std::{
 
 use chrono::Local;
 use flurry::{
-    config::{GRID_LENGTH, HOST, IMAGE_SAVE_INTERVAL, JPEG_UPDATE_INTERVAL},
+    config::{GRID_LENGTH, HOST, IMAGE_SAVE_INTERVAL, JPEG_UPDATE_INTERVAL, NO_AUTH},
     flutclient::FlutClient,
     grid::{self, Flut},
     webapi::WebApiContext,
     AsyncResult, COUNTER,
 };
 use futures::never::Never;
-use tokio::{net::TcpListener, time::interval, try_join};
+use tokio::{
+    io::{AsyncBufReadExt, BufReader},
+    net::{TcpListener, TcpStream},
+    time::interval,
+    try_join,
+};
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 
 /// This function logs the current amount of changed pixels to stdout every second
@@ -53,6 +58,18 @@ async fn save_image_frames(
     }
 }
 
+async fn handle_login(stream: &mut TcpStream) -> bool {
+    let mut buf = BufReader::new(stream);
+    let mut read = vec![0; 64];
+    match buf.read_until(0x00, &mut read).await {
+        Err(_) => return false,
+        Ok(n) if n == 0 => return false,
+        Ok(n) => {
+            todo!("call server for auth, token was {} long", n)
+        }
+    }
+}
+
 /// Handle connections made to the socket, keeps a vec of the currently active connections,
 /// uses timeout to loop through them and clean them up to stop a memory leak while not throwing
 /// everything away
@@ -62,15 +79,20 @@ async fn handle_flut(
 ) -> AsyncResult<Never> {
     let mut handles = Vec::new();
     loop {
-        let (mut socket, _) = flut_listener.accept().await?;
+        let (mut socket, addr) = flut_listener.accept().await?;
         let grids = grids.clone();
         handles.push(tokio::spawn(async move {
-            let (reader, writer) = socket.split();
-            let mut connection = FlutClient::new(reader, writer, grids);
-            let resp = connection.process_socket().await;
-            match resp {
-                Ok(()) => Ok(()),
-                Err(err) => Err(err),
+            if NO_AUTH || handle_login(&mut socket).await {
+                let (reader, writer) = socket.split();
+                let mut connection = FlutClient::new(reader, writer, grids);
+                let resp = connection.process_socket().await;
+                match resp {
+                    Ok(()) => Ok(()),
+                    Err(err) => Err(err),
+                }
+            } else {
+                println!("failed login attempt from {}", addr);
+                Ok(())
             }
         }))
     }
