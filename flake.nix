@@ -5,9 +5,12 @@
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    tsunami = {
+      url = "github:itepastra/tsunami";
+    };
   };
 
-  outputs = { self, fenix, nixpkgs, ... }:
+  outputs = { self, fenix, nixpkgs, tsunami, ... }:
     let
       allSystems = [
         "x86_64-linux" # 64-bit Intel/AMD Linux
@@ -17,6 +20,7 @@
       ];
       forAllSystems = f: nixpkgs.lib.genAttrs allSystems (system: f {
         inherit system;
+        inherit tsunami;
         pkgs = import nixpkgs { inherit system; };
         fpkgs = import fenix { inherit system; };
       });
@@ -31,24 +35,22 @@
           rec {
             default = flurry;
             flurry =
-              (pkgs.makeRustPlatform { cargo = toolchain; rustc = toolchain; }).buildRustPackage {
+              (pkgs.makeRustPlatform { cargo = toolchain; rustc = toolchain; }).buildRustPackage rec {
                 pname = "flurry";
                 version = "0.1.0";
-                cargoLock.lockFile = ./Cargo.lock;
+                cargoLock.lockFile = "${src}/Cargo.lock";
                 src = fs.toSource {
                   root = ./.;
                   fileset = fs.unions [
                     ./Cargo.lock
                     ./Cargo.toml
-                    ./flake.nix
-                    ./flake.lock
                     ./src
                   ];
                 };
               };
           });
       devShells = forAllSystems
-        ({ pkgs, fpkgs, ... }:
+        ({ pkgs, fpkgs, system, ... }:
           let
             ffpkgs = fpkgs.complete;
           in
@@ -62,6 +64,8 @@
                   ffpkgs.rustc
                   ffpkgs.rustfmt
                   pkgs.wgo
+                  self.packages.${system}.flurry
+                  tsunami.packages.${system}.tsunami
                 ];
               };
           });
