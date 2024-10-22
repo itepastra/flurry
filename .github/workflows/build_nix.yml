@@ -3,9 +3,21 @@ on:
   pull_request:
   push:
 jobs:
-  tests:
+  checkout:
     runs-on: self-hosted
     steps:
     - uses: actions/checkout@v4
-    - run: nix build -L
-    - run: nix flake check -L --all-systems
+  check_flurry_package:
+    runs-on: self-hosted
+    steps:
+      - run: nix flake check -L --all-systems
+  build_flurry_package:
+    runs-on: self-hosted
+    needs: checkout
+    steps:
+      - run: nix build -L
+  build_flurry_shell:
+    runs-on: self-hosted
+    needs: checkout
+    steps:
+      - run: nix shell -L --command echo 'it works'

@@ -12,7 +12,9 @@ pub mod config;
 pub mod flutclient;
 pub mod grid;
 pub mod protocols;
+pub(crate) mod stream;
 pub mod utils;
+pub mod webapi;
 
 mod color;
 
@@ -20,6 +22,8 @@ pub type Canvas = u8;
 pub type Coordinate = u16;
 
 pub static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+pub type AsyncResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 fn set_pixel_rgba(
     grids: &[grid::Flut<u32>],
