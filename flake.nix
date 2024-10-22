@@ -35,10 +35,10 @@
           rec {
             default = flurry;
             flurry =
-              (pkgs.makeRustPlatform { cargo = toolchain; rustc = toolchain; }).buildRustPackage {
+              (pkgs.makeRustPlatform { cargo = toolchain; rustc = toolchain; }).buildRustPackage rec {
                 pname = "flurry";
                 version = "0.1.0";
-                cargoLock.lockFile = ./Cargo.lock;
+                cargoLock.lockFile = "${src}/Cargo.lock";
                 src = fs.toSource {
                   root = ./.;
                   fileset = fs.unions [
