@@ -9,14 +9,19 @@ use std::{
 
 use chrono::Local;
 use flurry::{
-    config::{GRID_LENGTH, HOST, IMAGE_SAVE_INTERVAL, JPEG_UPDATE_INTERVAL},
+    config::{GRID_LENGTH, HOST, IMAGE_SAVE_INTERVAL, JPEG_UPDATE_INTERVAL, NO_AUTH},
     flutclient::FlutClient,
     grid::{self, Flut},
     webapi::WebApiContext,
     AsyncResult, COUNTER,
 };
 use futures::never::Never;
-use tokio::{net::TcpListener, time::interval, try_join};
+use tokio::{
+    io::{AsyncBufReadExt, BufReader},
+    net::{TcpListener, TcpStream},
+    time::interval,
+    try_join,
+};
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 
 /// This function logs the current amount of changed pixels to stdout every second
