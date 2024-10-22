@@ -26,6 +26,7 @@
         ({ pkgs, fpkgs, ... }:
           let
             toolchain = fpkgs.minimal.toolchain;
+            fs = pkgs.lib.fileset;
           in
           rec {
             default = flurry;
@@ -34,7 +35,16 @@
                 pname = "flurry";
                 version = "0.1.0";
                 cargoLock.lockFile = ./Cargo.lock;
-                src = pkgs.lib.cleanSource ./.;
+                src = fs.toSource {
+                  root = ./.;
+                  fileset = fs.unions [
+                    ./Cargo.lock
+                    ./Cargo.toml
+                    ./flake.nix
+                    ./flake.lock
+                    ./src
+                  ];
+                };
               };
           });
       devShells = forAllSystems
