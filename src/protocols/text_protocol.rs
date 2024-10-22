@@ -1,14 +1,15 @@
-use std::io::{self, Error, ErrorKind};
-
 use atoi_radix10::parse_from_str;
+use std::io::{self, Error, ErrorKind};
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWriteExt};
 
 use crate::{
-    Canvas, Color, Command, Coordinate, IOProtocol, Parser, Protocol, Responder, Response,
-    GRID_LENGTH, HELP_TEXT,
+    config::{GRID_LENGTH, HELP_TEXT},
+    Canvas, Color, Command, Coordinate, Protocol, Response,
 };
 
-#[derive(Clone)]
+use super::{IOProtocol, Parser, Responder};
+
+#[derive(Clone, Default)]
 pub struct TextParser {
     canvas: Canvas,
 }
@@ -169,7 +170,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_help_parse() {
-        let parser = TextParser::new(0);
+        let parser = TextParser::default();
         let reader = tokio_test::io::Builder::new().read(b"HELP\n").build();
         let mut bufreader = BufReader::new(reader);
         let thingy = parser.parse(&mut bufreader).await;
@@ -178,7 +179,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_size_parse() {
-        let parser = TextParser::new(0);
+        let parser = TextParser::default();
         let reader = tokio_test::io::Builder::new().read(b"SIZE\n").build();
         let mut bufreader = BufReader::new(reader);
         let thingy = parser.parse(&mut bufreader).await;
@@ -187,7 +188,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_canvas_parse() {
-        let parser = TextParser::new(0);
+        let parser = TextParser::default();
         let reader = tokio_test::io::Builder::new().read(b"CANVAS 12\n").build();
         let mut bufreader = BufReader::new(reader);
         let thingy = parser.parse(&mut bufreader).await;
@@ -196,7 +197,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_px_set_w_parse() {
-        let parser = TextParser::new(0);
+        let parser = TextParser::default();
         let reader = tokio_test::io::Builder::new()
             .read(b"PX 28283 29991 81\n")
             .build();
@@ -210,7 +211,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_px_set_rgb_parse() {
-        let parser = TextParser::new(0);
+        let parser = TextParser::default();
         let reader = tokio_test::io::Builder::new()
             .read(b"PX 28283 29991 8800ff\n")
             .build();
@@ -224,7 +225,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_px_set_rgba_parse() {
-        let parser = TextParser::new(0);
+        let parser = TextParser::default();
         let reader = tokio_test::io::Builder::new()
             .read(b"PX 28283 29991 8800ff28\n")
             .build();
@@ -238,7 +239,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_px_get_parse() {
-        let parser = TextParser::new(0);
+        let parser = TextParser::default();
         let reader = tokio_test::io::Builder::new()
             .read(b"PX 28283 29991\n")
             .build();
@@ -249,7 +250,7 @@ mod tests {
 
     #[tokio::test]
     async fn parse_multiple() {
-        let parser = TextParser::new(0);
+        let parser = TextParser::default();
         let reader = tokio_test::io::Builder::new()
             .read(b"CANVAS 12\n")
             .read(b"SIZE\n")

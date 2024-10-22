@@ -1,6 +1,9 @@
-use std::cell::SyncUnsafeCell;
+use std::{
+    cell::SyncUnsafeCell,
+    sync::{RwLock, RwLockReadGuard},
+};
 
-use image::{DynamicImage, GenericImage, GenericImageView, ImageBuffer, Pixel, Rgb, Rgba};
+use image::{GenericImageView, Rgb};
 
 use crate::Coordinate;
 
@@ -15,6 +18,7 @@ pub struct Flut<T> {
     size_x: usize,
     size_y: usize,
     cells: SyncUnsafeCell<Vec<T>>,
+    jpgbuf: RwLock<Vec<u8>>,
 }
 
 impl<T: Clone> Flut<T> {
@@ -27,6 +31,7 @@ impl<T: Clone> Flut<T> {
             size_x,
             size_y,
             cells: vec.into(),
+            jpgbuf: RwLock::new(Vec::new()),
         }
     }
 
@@ -43,6 +48,9 @@ impl<T> Flut<T> {
             return None;
         }
         Some((y * self.size_x) + x)
+    }
+    pub fn read_jpg_buffer(&self) -> RwLockReadGuard<'_, Vec<u8>> {
+        self.jpgbuf.read().expect("RWlock didn't exit nicely")
     }
 }
 
@@ -74,18 +82,30 @@ impl GenericImageView for Flut<u32> {
     }
 
     fn get_pixel(&self, x: u32, y: u32) -> Self::Pixel {
-        let pixel = self.get_unchecked(x as u16, y as u16);
+        let pixel = self.get_unchecked(x as Coordinate, y as Coordinate);
         let [r, g, b, _a] = pixel.to_be_bytes();
         Rgb::from([r, g, b])
+    }
+}
+
+impl Flut<u32> {
+    pub fn update_jpg_buffer(&self) {
+        let mut jpgbuf = self.jpgbuf.write().expect("Could not get write RWlock");
+        jpgbuf.clear();
+        let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut *jpgbuf, 50);
+        let subimage = self.view(0, 0, self.width(), self.height()).to_image();
+        match subimage.write_with_encoder(encoder) {
+            Ok(_) => {}
+            Err(err) => tracing::error!("Error writing jpeg buffer: {:?}", err),
+        }
     }
 }
 
 #[cfg(test)]
 #[allow(clippy::needless_return)]
 mod tests {
-    use super::*;
-    use crate::grid::Flut;
-    use test::Bencher;
+    use super::Flut;
+    use super::Grid;
 
     #[tokio::test]
     async fn test_grid_init_values() {
@@ -131,31 +151,5 @@ mod tests {
         grid.set(3, 1, 256);
         assert_eq!(grid.get(3, 1), None);
         assert_eq!(grid.get(1, 2), Some(&0));
-    }
-
-    #[bench]
-    fn bench_init(b: &mut Bencher) {
-        b.iter(|| Flut::init(800, 600, 0));
-    }
-
-    #[bench]
-    fn bench_set(b: &mut Bencher) {
-        let grid = Flut::init(800, 600, 0);
-        b.iter(|| {
-            let x = test::black_box(293);
-            let y = test::black_box(222);
-            let color = test::black_box(0x29_39_23);
-            grid.set(x, y, color);
-        });
-    }
-
-    #[bench]
-    fn bench_get(b: &mut Bencher) {
-        let grid = Flut::init(800, 600, 0);
-        b.iter(|| {
-            let x = test::black_box(293);
-            let y = test::black_box(222);
-            grid.get(x, y)
-        });
     }
 }

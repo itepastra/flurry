@@ -1,13 +1,16 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/master";
     fenix = {
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    tsunami = {
+      url = "github:itepastra/tsunami";
+    };
   };
 
-  outputs = { self, fenix, nixpkgs, ... }:
+  outputs = { self, fenix, nixpkgs, tsunami, ... }:
     let
       allSystems = [
         "x86_64-linux" # 64-bit Intel/AMD Linux
@@ -17,35 +20,59 @@
       ];
       forAllSystems = f: nixpkgs.lib.genAttrs allSystems (system: f {
         inherit system;
+        inherit tsunami;
         pkgs = import nixpkgs { inherit system; };
         fpkgs = import fenix { inherit system; };
       });
     in
     {
       packages = forAllSystems
-        ({ system, pkgs, fpkgs }:
+        ({ pkgs, fpkgs, ... }:
           let
             toolchain = fpkgs.minimal.toolchain;
+            fs = pkgs.lib.fileset;
           in
           rec {
             default = flurry;
             flurry =
-              (pkgs.makeRustPlatform { cargo = toolchain; rustc = toolchain; }).buildRustPackage {
+              (pkgs.makeRustPlatform { cargo = toolchain; rustc = toolchain; }).buildRustPackage rec {
                 pname = "flurry";
                 version = "0.1.0";
-                cargoLock.lockFile = ./Cargo.lock;
-                src = pkgs.lib.cleanSource ./.;
+                cargoLock.lockFile = "${src}/Cargo.lock";
+                src = fs.toSource {
+                  root = ./.;
+                  fileset = fs.unions [
+                    ./Cargo.lock
+                    ./Cargo.toml
+                    ./src
+                  ];
+                };
               };
           });
-      devShell = forAllSystems ({ system, pkgs, ... }:
-        pkgs.mkShell {
-          buildInputs = [
-            pkgs.rustup
-            pkgs.wgo
-            pkgs.cargo-flamegraph
-            pkgs.cargo-udeps
-          ];
-        });
+      devShells = forAllSystems
+        ({ pkgs, fpkgs, system, ... }:
+          let
+            ffpkgs = fpkgs.complete;
+          in
+          {
+            default = pkgs.mkShell
+              {
+                buildInputs = [
+                  ffpkgs.cargo
+                  ffpkgs.clippy
+                  ffpkgs.rust-src
+                  ffpkgs.rustc
+                  ffpkgs.rustfmt
+                  pkgs.wgo
+                  self.packages.${system}.flurry
+                  tsunami.packages.${system}.tsunami
+                ];
+              };
+          });
+      hydraJobs = {
+        devShell.x86_64-linux = self.devShells.x86_64-linux.default;
+        flurry.x86_64-linux = self.packages.x86_64-linux.flurry;
+      };
     };
 }
 

@@ -1,0 +1,17 @@
+name: "build nix"
+on:
+  pull_request:
+  push:
+jobs:
+  check_flurry_package:
+    runs-on: self-hosted
+    steps:
+      - run: nix flake check -L --all-systems
+  build_flurry_package:
+    runs-on: self-hosted
+    steps:
+      - run: nix build -L
+  build_flurry_shell:
+    runs-on: self-hosted
+    steps:
+      - run: nix shell -L --command echo 'it works'

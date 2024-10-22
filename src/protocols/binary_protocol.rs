@@ -2,7 +2,9 @@ use std::io::{self, Error, ErrorKind};
 
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt};
 
-use crate::{Canvas, Color, Command, IOProtocol, Parser, Responder, Response};
+use crate::{Canvas, Color, Command, Response};
+
+use super::{IOProtocol, Parser, Responder};
 
 const SIZE_BIN: u8 = 115;
 const HELP_BIN: u8 = 104;
@@ -11,14 +13,8 @@ const SET_PX_RGB_BIN: u8 = 128;
 const SET_PX_RGBA_BIN: u8 = 129;
 const SET_PX_W_BIN: u8 = 130;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct BinaryParser {}
-
-impl BinaryParser {
-    pub fn new() -> BinaryParser {
-        BinaryParser {}
-    }
-}
 
 impl<R: AsyncBufRead + AsyncBufReadExt + std::marker::Unpin> Parser<R> for BinaryParser {
     async fn parse(&self, reader: &mut R) -> io::Result<Command> {
@@ -78,12 +74,12 @@ impl<R: AsyncBufRead + AsyncBufReadExt + std::marker::Unpin> Parser<R> for Binar
                     ))
                 }
                 _ => {
-                    eprintln!("received illegal command: {command}");
+                    tracing::error!("received illegal command: {command}");
                     Err(Error::from(ErrorKind::InvalidInput))
                 }
             },
             Err(err) => {
-                eprintln!("{err}");
+                tracing::error!("{err}");
                 Err(err)
             }
         }
@@ -131,7 +127,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_bin_help_parse() {
-        let parser = BinaryParser::new();
+        let parser = BinaryParser::default();
         let reader = tokio_test::io::Builder::new().read(&[HELP_BIN]).build();
         let mut bufreader = BufReader::new(reader);
         let thingy = parser.parse(&mut bufreader).await;
@@ -140,7 +136,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_bin_size_parse() {
-        let parser = BinaryParser::new();
+        let parser = BinaryParser::default();
         let reader = tokio_test::io::Builder::new().read(&[SIZE_BIN, 3]).build();
         let mut bufreader = BufReader::new(reader);
         let thingy = parser.parse(&mut bufreader).await;
@@ -149,7 +145,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_bin_px_set_w_parse() {
-        let parser = BinaryParser::new();
+        let parser = BinaryParser::default();
         let reader = tokio_test::io::Builder::new()
             .read(&[SET_PX_W_BIN, 0x01, 0x69, 0x42, 0x42, 0x69, 0x82])
             .build();
@@ -163,7 +159,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_bin_px_set_rgb_parse() {
-        let parser = BinaryParser::new();
+        let parser = BinaryParser::default();
         let reader = tokio_test::io::Builder::new()
             .read(&[
                 SET_PX_RGB_BIN,
@@ -187,7 +183,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_bin_px_set_rgba_parse() {
-        let parser = BinaryParser::new();
+        let parser = BinaryParser::default();
         let reader = tokio_test::io::Builder::new()
             .read(&[
                 SET_PX_RGBA_BIN,
@@ -212,7 +208,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_bin_px_get_parse() {
-        let parser = BinaryParser::new();
+        let parser = BinaryParser::default();
         let reader = tokio_test::io::Builder::new()
             .read(&[GET_PX_BIN, 0x03, 0x69, 0x42, 0x42, 0x69])
             .build();
@@ -223,7 +219,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_bin_parse_multiple() {
-        let parser = BinaryParser::new();
+        let parser = BinaryParser::default();
         let reader = tokio_test::io::Builder::new()
             .read(&[
                 SET_PX_RGB_BIN,
