@@ -74,12 +74,12 @@ impl<R: AsyncBufRead + AsyncBufReadExt + std::marker::Unpin> Parser<R> for Binar
                     ))
                 }
                 _ => {
-                    eprintln!("received illegal command: {command}");
+                    tracing::error!("received illegal command: {command}");
                     Err(Error::from(ErrorKind::InvalidInput))
                 }
             },
             Err(err) => {
-                eprintln!("{err}");
+                tracing::error!("{err}");
                 Err(err)
             }
         }
