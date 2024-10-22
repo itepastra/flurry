@@ -1,6 +1,5 @@
 use std::{
     fs::{create_dir_all, File},
-    future::IntoFuture,
     io::Write as _,
     path::Path,
     process::exit,
@@ -16,8 +15,8 @@ use flurry::{
     webapi::WebApiContext,
     AsyncResult, COUNTER,
 };
-use futures::{never::Never, FutureExt};
-use tokio::{join, net::TcpListener, select, time::interval, try_join};
+use futures::never::Never;
+use tokio::{net::TcpListener, time::interval, try_join};
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 
 /// This function logs the current amount of changed pixels to stdout every second
