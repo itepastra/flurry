@@ -6,12 +6,18 @@ jobs:
   check_flurry_package:
     runs-on: self-hosted
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
       - run: nix flake check -L --all-systems
   build_flurry_package:
     runs-on: self-hosted
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
       - run: nix build -L
   build_flurry_shell:
     runs-on: self-hosted
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
       - run: nix shell -L --command echo 'it works'
