@@ -13,8 +13,6 @@ jobs:
         uses: actions/checkout@v4
       - run: nix shell nixpkgs#cargo --command cargo update
       - run: nix shell nixpkgs#git --command git add Cargo.lock
-      - run: "nix shell nixpkgs#git --command git commit -m 'cargo: update Cargo.lock'"
-      - run: nix flake update
       - name: Check flake
         uses: DeterminateSystems/flake-checker-action@main
       - run: nix build
