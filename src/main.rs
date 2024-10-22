@@ -120,10 +120,11 @@ async fn main() {
     }));
 
     let res = try_join! {
-        pixel_logger.then(|res| if let Err(err) = res { tracing::error!("Error in pixel count logger: {err}")}),
-        snapshots.then(|res| if let Err(err) = res { tracing::error!("Error in periodic snapshots: {err}")}),
-        pixelflut_server.then(|res| if let Err(err) = res { tracing::error!("Error in pixelflut server: {err}")}),
-        jpeg_update_loop.then(|res| if let Err(err) = res { tracing::error!("Error in jpeg encoding loop: {err}")}),
-        website.then(|res| if let Err(err) = res { tracing::error!("Error in website: {err}")}),
+        pixel_logger,
+        snapshots,
+        pixelflut_server,
+        jpeg_update_loop,
+        website,
     };
+    tracing::error!("something went wrong {:?}", res);
 }
