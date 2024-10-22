@@ -5,19 +5,16 @@ on:
     - cron: '0 4 * * *' # at 04:00 every day
 
 jobs:
-  cargo:
-    runs-on: self-hosted
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - run: nix shell nixpkgs#cargo --command cargo update
-
-  flake:
+  update:
+    name: Update dependencies
     runs-on: self-hosted
     needs: cargo
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      - run: nix shell nixpkgs#cargo --command cargo update
+      - run: nix shell nixpkgs#git --command git add Cargo.lock
+      - run: "nix shell nixpkgs#git --command git commit -m 'cargo: update Cargo.lock'"
       - run: nix flake update
       - name: Check flake
         uses: DeterminateSystems/flake-checker-action@main
