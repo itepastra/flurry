@@ -11,11 +11,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - run: nix shell nixpkgs#cargo --command cargo update
-      - run: nix shell nixpkgs#git --command git add Cargo.lock
+      - run: nix shell -L nixpkgs#cargo --command cargo update
+      - run: nix shell -L nixpkgs#git --command git add Cargo.lock
       - name: Check flake
         uses: DeterminateSystems/flake-checker-action@main
-      - run: nix build
+      - run: nix build -L
       - name: Update Nix Flake Lock
         uses: DeterminateSystems/update-flake-lock@main
         with:
