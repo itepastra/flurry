@@ -1,9 +1,8 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/master";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     fenix = {
       url = "github:nix-community/fenix";
-      inputs.nixpkgs.follows = "nixpkgs";
     };
     tsunami = {
       url = "github:itepastra/tsunami";
@@ -35,10 +34,10 @@
           rec {
             default = flurry;
             flurry =
-              (pkgs.makeRustPlatform { cargo = toolchain; rustc = toolchain; }).buildRustPackage rec {
+              (pkgs.makeRustPlatform { cargo = toolchain; rustc = toolchain; }).buildRustPackage {
                 pname = "flurry";
                 version = "0.1.0";
-                cargoLock.lockFile = "${src}/Cargo.lock";
+                cargoLock.lockFile = ./Cargo.lock;
                 src = fs.toSource {
                   root = ./.;
                   fileset = fs.unions [
