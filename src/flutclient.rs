@@ -9,7 +9,7 @@ use crate::{
     get_pixel,
     grid::{self, Flut},
     increment_counter,
-    protocols::{BinaryParser, IOProtocol, Parser, Responder, TextParser},
+    protocols::{BinaryParser, IOProtocol, PaletteParser, Parser, Responder, TextParser},
     set_pixel_rgba, Canvas, Color, Command, Coordinate, Protocol, Response,
 };
 
@@ -26,10 +26,10 @@ macro_rules! build_parser_type_enum {
 
         impl std::default::Default for ParserTypes {
             // add code here
+            #[allow(unreachable_code)]
             fn default() -> Self {
                 $(
                     #[cfg(feature = $feat)]
-                    #[allow(unreachable_code)]
                     return ParserTypes::$name(<$t>::default());
                 )*
             }
@@ -62,6 +62,7 @@ macro_rules! build_parser_type_enum {
 build_parser_type_enum! {
     TextParser: TextParser: "text",
     BinaryParser: BinaryParser: "binary",
+    PaletteParser: PaletteParser: "palette",
 }
 
 pub struct FlutClient<R, W>
@@ -142,6 +143,13 @@ where
             Protocol::Binary => self.parser = ParserTypes::BinaryParser(BinaryParser::default()),
             #[cfg(not(feature = "binary"))]
             Protocol::Binary => {
+                self.writer.write(b"feature \"binary\" is not enabled.");
+                self.writer.flush();
+            }
+            #[cfg(feature = "palette")]
+            Protocol::Palette => self.parser = ParserTypes::Palette(PaletteParser::default()),
+            #[cfg(not(feature = "palette"))]
+            Protocol::Palette => {
                 self.writer.write(b"feature \"binary\" is not enabled.");
                 self.writer.flush();
             }

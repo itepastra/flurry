@@ -106,6 +106,7 @@ impl TextParser {
         match protocol {
             "binary" => Ok(Command::ChangeProtocol(Protocol::Binary)),
             "text" => Ok(Command::ChangeProtocol(Protocol::Text)),
+            "palette" => Ok(Command::ChangeProtocol(Protocol::Palette)),
             _ => Err(Error::from(ErrorKind::InvalidInput)),
         }
     }

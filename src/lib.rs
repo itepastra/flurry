@@ -57,6 +57,7 @@ fn increment_counter(amount: u64) {
 pub enum Protocol {
     Text,
     Binary,
+    Palette,
 }
 
 #[derive(Debug, PartialEq)]

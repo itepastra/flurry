@@ -29,6 +29,7 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 default = ["text", "binary"]
 text = []
 binary = []
+palette = []
 
 [dev-dependencies]
 tempfile = "*"
