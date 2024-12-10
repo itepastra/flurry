@@ -39,9 +39,9 @@ macro_rules! build_parser_type_enum {
             pub fn announce() {
                 $(
                     #[cfg(feature = $feat)]
-                    println!("Enabling {}", $feat);
+                    tracing::info!("Enabled {}", $feat);
                     #[cfg(not(feature = $feat))]
-                    println!("Keeping {} disabled", $feat);
+                    tracing::info!("Disabled {}", $feat);
                 )*
             }
         }
