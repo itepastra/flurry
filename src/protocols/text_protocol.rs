@@ -210,6 +210,20 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_px_set_w_parse_caps() {
+        let parser = TextParser::default();
+        let reader = tokio_test::io::Builder::new()
+            .read(b"PX 28283 29991 AB\n")
+            .build();
+        let mut bufreader = BufReader::new(reader);
+        let thingy = parser.parse(&mut bufreader).await;
+        assert_eq!(
+            thingy.unwrap(),
+            Command::SetPixel(0, 28283, 29991, Color::W8(0xAB))
+        );
+    }
+
+    #[tokio::test]
     async fn test_px_set_rgb_parse() {
         let parser = TextParser::default();
         let reader = tokio_test::io::Builder::new()
@@ -224,6 +238,20 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_px_set_rgb_parse_caps() {
+        let parser = TextParser::default();
+        let reader = tokio_test::io::Builder::new()
+            .read(b"PX 28283 29991 8800FA\n")
+            .build();
+        let mut bufreader = BufReader::new(reader);
+        let thingy = parser.parse(&mut bufreader).await;
+        assert_eq!(
+            thingy.unwrap(),
+            Command::SetPixel(0, 28283, 29991, Color::RGB24(0x88, 0x00, 0xfa))
+        );
+    }
+
+    #[tokio::test]
     async fn test_px_set_rgba_parse() {
         let parser = TextParser::default();
         let reader = tokio_test::io::Builder::new()
@@ -234,6 +262,20 @@ mod tests {
         assert_eq!(
             thingy.unwrap(),
             Command::SetPixel(0, 28283, 29991, Color::RGBA32(0x88, 0x00, 0xff, 0x28))
+        );
+    }
+
+    #[tokio::test]
+    async fn test_px_set_rgba_parse_caps() {
+        let parser = TextParser::default();
+        let reader = tokio_test::io::Builder::new()
+            .read(b"PX 28283 29991 AB0c3F88\n")
+            .build();
+        let mut bufreader = BufReader::new(reader);
+        let thingy = parser.parse(&mut bufreader).await;
+        assert_eq!(
+            thingy.unwrap(),
+            Command::SetPixel(0, 28283, 29991, Color::RGBA32(0xab, 0x0c, 0x3f, 0x88))
         );
     }
 
