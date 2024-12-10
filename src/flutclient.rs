@@ -28,6 +28,7 @@ macro_rules! build_parser_type_enum {
             // add code here
             fn default() -> Self {
                 $(
+                    #[allow(unreachable_code)]
                     #[cfg(feature = $feat)]
                     return ParserTypes::$name(<$t>::default());
                 )*
