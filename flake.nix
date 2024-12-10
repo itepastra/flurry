@@ -63,7 +63,6 @@
                   ffpkgs.rustc
                   ffpkgs.rustfmt
                   pkgs.wgo
-                  self.packages.${system}.flurry
                   tsunami.packages.${system}.tsunami
                 ];
               };
