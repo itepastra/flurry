@@ -25,6 +25,11 @@ tower-http = { version = "0.6.1", features = ["fs", "trace"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 
+[features]
+default = ["text", "binary"]
+text = []
+binary = []
+
 [dev-dependencies]
 tempfile = "*"
 test-case = "*"
