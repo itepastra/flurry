@@ -64,6 +64,8 @@
                   ffpkgs.rustfmt
                   pkgs.wgo
                   tsunami.packages.${system}.tsunami
+                  pkgs.openssl
+                  pkgs.pkg-config
                 ];
               };
           });

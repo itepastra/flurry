@@ -3,9 +3,12 @@ use std::{
     sync::Arc,
 };
 
-use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
+#[cfg(feature = "auth")]
+use reqwest::{Client, ClientBuilder};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
 
 use crate::{
+    config::AUTH_SERVER_URL,
     get_pixel,
     grid::{self, Flut},
     increment_counter,
@@ -74,6 +77,8 @@ where
     grids: Arc<[Flut<u32>]>,
     parser: ParserTypes,
     counter: u64,
+    #[cfg(feature = "auth")]
+    auth_client: Client,
 }
 
 impl<R, W> FlutClient<R, W>
@@ -155,10 +160,37 @@ where
             grids,
             parser: ParserTypes::default(),
             counter: 0,
+            #[cfg(feature = "auth")]
+            auth_client: ClientBuilder::new().https_only(true).build().unwrap(),
         }
     }
 
     pub async fn process_socket(&mut self) -> io::Result<()> {
+        // Handle the auth flow
+        #[cfg(feature = "auth")]
+        {
+            let mut buf = Vec::new();
+            let chars = self.reader.read_until(b' ', &mut buf).await?;
+            if chars != 5 {
+                return Err(Error::from(ErrorKind::PermissionDenied));
+            }
+            if buf != b"AUTH " {
+                return Err(Error::from(ErrorKind::PermissionDenied));
+            }
+
+            buf.clear();
+            let token_length = self.reader.read_until(b'\n', &mut buf).await?;
+
+            if token_length < 100 {
+                let request = self
+                    .auth_client
+                    .post(AUTH_SERVER_URL)
+                    .body(buf)
+                    .build()
+                    .unwrap();
+                let response = self.auth_client.execute(request).await.unwrap();
+            }
+        }
         loop {
             match_parser!(parser: &self.parser.clone() => 'outer: loop {
                 for _ in 0..1000 {
