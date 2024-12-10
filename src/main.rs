@@ -10,7 +10,7 @@ use std::{
 use chrono::Local;
 use flurry::{
     config::{GRID_LENGTH, HOST, IMAGE_SAVE_INTERVAL, JPEG_UPDATE_INTERVAL},
-    flutclient::FlutClient,
+    flutclient::{FlutClient, ParserTypes},
     grid::{self, Flut},
     webapi::WebApiContext,
     AsyncResult, COUNTER,
@@ -101,6 +101,8 @@ async fn main() {
 
     let grids: Arc<[Flut<u32>; GRID_LENGTH]> = [grid::Flut::init(800, 600, 0xff_00_ff_ff)].into();
     tracing::trace!("created grids");
+
+    ParserTypes::announce();
 
     let Ok(flut_listener) = TcpListener::bind(HOST).await else {
         tracing::error!(

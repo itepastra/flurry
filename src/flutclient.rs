@@ -14,17 +14,43 @@ use crate::{
 };
 
 macro_rules! build_parser_type_enum {
-    ($($name:ident: $t:ty,)*) => {
+    ($($name:ident: $t:ty: $feat:expr,)*) => {
 
         #[derive(Clone)]
-        enum ParserTypes {
-            $($name($t),)*
+        pub enum ParserTypes {
+            $(
+                #[cfg(feature = $feat)]
+                $name($t),
+            )*
+        }
+
+        impl std::default::Default for ParserTypes {
+            // add code here
+            fn default() -> Self {
+                $(
+                    #[cfg(feature = $feat)]
+                    #[allow(unreachable_code)]
+                    return ParserTypes::$name(<$t>::default());
+                )*
+            }
+        }
+
+        impl ParserTypes {
+            pub fn announce() {
+                $(
+                    #[cfg(feature = $feat)]
+                    tracing::info!("Enabled {}", $feat);
+                    #[cfg(not(feature = $feat))]
+                    tracing::info!("Disabled {}", $feat);
+                )*
+            }
         }
 
         macro_rules! match_parser {
             ($pident:ident: $parser:expr => $f:expr) => (
                 match &mut $parser {
                     $(
+                        #[cfg(feature = $feat)]
                         ParserTypes::$name($pident) => $f,
                     )*
                 }
@@ -34,8 +60,8 @@ macro_rules! build_parser_type_enum {
 }
 
 build_parser_type_enum! {
-    TextParser: TextParser,
-    BinaryParser: BinaryParser,
+    TextParser: TextParser: "text",
+    BinaryParser: BinaryParser: "binary",
 }
 
 pub struct FlutClient<R, W>
@@ -105,8 +131,20 @@ where
 
     fn change_protocol(&mut self, protocol: &Protocol) {
         match protocol {
+            #[cfg(feature = "text")]
             Protocol::Text => self.parser = ParserTypes::TextParser(TextParser::default()),
+            #[cfg(not(feature = "text"))]
+            Protocol::Text => {
+                self.writer.write(b"feature \"text\" is not enabled.");
+                self.writer.flush();
+            }
+            #[cfg(feature = "binary")]
             Protocol::Binary => self.parser = ParserTypes::BinaryParser(BinaryParser::default()),
+            #[cfg(not(feature = "binary"))]
+            Protocol::Binary => {
+                self.writer.write(b"feature \"binary\" is not enabled.");
+                self.writer.flush();
+            }
         }
     }
 
@@ -115,7 +153,7 @@ where
             reader: BufReader::new(reader),
             writer: BufWriter::new(writer),
             grids,
-            parser: ParserTypes::TextParser(TextParser::default()),
+            parser: ParserTypes::default(),
             counter: 0,
         }
     }
