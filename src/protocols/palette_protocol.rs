@@ -9,6 +9,7 @@ use crate::{Canvas, Color, Command, Response};
 use super::{IOProtocol, Parser, Responder};
 
 const SIZE_BIN: u8 = 115;
+const PROTOCOLS_BIN: u8 = 116;
 const HELP_BIN: u8 = 104;
 const GET_PX_BIN: u8 = 32;
 const SET_PX_PALETTE_BIN: u8 = 33;
@@ -40,6 +41,7 @@ impl<R: AsyncBufRead + AsyncBufReadExt + std::marker::Unpin> Parser<R> for Palet
         match fst {
             Ok(command) => match command {
                 HELP_BIN => Ok(Command::Help),
+                PROTOCOLS_BIN => Ok(Command::Protocols),
                 SIZE_BIN => {
                     let canvas = reader.read_u8().await?;
                     Ok(Command::Size(canvas))
@@ -100,6 +102,23 @@ impl<W: AsyncWriteExt + std::marker::Unpin> Responder<W> for PaletteParser {
                             .as_bytes(),
                     )
                     .await
+            }
+            Response::Protocols(protos) => {
+                for protocol in protos {
+                    match protocol {
+                        crate::ProtocolStatus::Enabled(proto) => {
+                            writer
+                                .write_all(format!("Enabled: {}\n", proto).as_bytes())
+                                .await?;
+                        }
+                        crate::ProtocolStatus::Disabled(proto) => {
+                            writer
+                                .write_all(format!("Disabled: {}\n", proto).as_bytes())
+                                .await?;
+                        }
+                    }
+                }
+                Ok(())
             }
             Response::Size(x, y) => {
                 writer.write_u16(x).await?;
