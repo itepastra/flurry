@@ -117,6 +117,8 @@ impl<R: AsyncBufRead + AsyncBufReadExt + std::marker::Unpin> Parser<R> for TextP
         if reader.read_line(&mut line).await.is_ok() {
             if line.starts_with("HELP") {
                 return Ok(Command::Help);
+            } else if line.starts_with("PROTOCOLS") {
+                return Ok(Command::Protocols);
             } else if line.starts_with("SIZE") {
                 return Ok(Command::Size(self.canvas));
             } else if line.starts_with("PX ") {
