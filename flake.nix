@@ -85,8 +85,10 @@
               ffpkgs.rustfmt
               pkgs.wgo
               tsunami.packages.${system}.tsunami
-              pkgs.openssl.dev
               pkgs.pkg-config
+            ];
+            LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
+              pkgs.openssl
             ];
           };
         }
