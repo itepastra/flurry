@@ -63,6 +63,7 @@ pub enum ProtocolStatus {
 pub enum Protocol {
     Text,
     Binary,
+    Palette,
 }
 
 #[derive(Debug, PartialEq)]
@@ -74,6 +75,8 @@ pub enum Command {
     SetPixel(Canvas, Coordinate, Coordinate, Color),
     ChangeCanvas(Canvas),
     ChangeProtocol(Protocol),
+    #[cfg(feature = "palette")]
+    ChangeColor(u8, Color),
 }
 
 #[derive(Debug, PartialEq)]
