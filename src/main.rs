@@ -7,7 +7,6 @@ use std::{
     time::Duration,
 };
 
-use chrono::Local;
 use flurry::{
     config::{GRID_LENGTH, HOST, IMAGE_SAVE_INTERVAL, JPEG_UPDATE_INTERVAL},
     flutclient::{FlutClient, ParserTypes},
@@ -39,13 +38,16 @@ async fn save_image_frames(
     grids: Arc<[grid::Flut<u32>; GRID_LENGTH]>,
     duration: Duration,
 ) -> AsyncResult<Never> {
-    let base_dir = Path::new("./recordings");
     let mut timer = interval(duration);
+    let base_dir = Path::new("./recordings");
     create_dir_all(base_dir)?;
     loop {
         timer.tick().await;
         for grid in grids.as_ref() {
-            let p = base_dir.join(format!("{}", Local::now().format("%Y-%m-%d_%H-%M-%S.jpg")));
+            let p = base_dir.join(format!(
+                "{}",
+                chrono::Local::now().format("%Y-%m-%d_%H-%M-%S.jpg")
+            ));
             let mut file_writer = File::create(p)?;
 
             file_writer.write_all(&grid.read_jpg_buffer())?;
