@@ -106,6 +106,23 @@ To set a pixel using RGB, use ({SET_PX_RGB_BIN:02X}) (u8 canvas) (x as u16_le) (
 );
                 writer.write_all(help_text.as_bytes()).await
             }
+            Response::Protocols(protos) => {
+                for protocol in protos {
+                    match protocol {
+                        crate::ProtocolStatus::Enabled(proto) => {
+                            writer
+                                .write_all(format!("Enabled: {}\n", proto).as_bytes())
+                                .await?;
+                        }
+                        crate::ProtocolStatus::Disabled(proto) => {
+                            writer
+                                .write_all(format!("Disabled: {}\n", proto).as_bytes())
+                                .await?;
+                        }
+                    }
+                }
+                Ok(())
+            }
             Response::Size(x, y) => {
                 writer.write_u16(x).await?;
                 writer.write_u16(y).await

@@ -54,6 +54,12 @@ fn increment_counter(amount: u64) {
 }
 
 #[derive(Debug, PartialEq)]
+pub enum ProtocolStatus {
+    Enabled(&'static str),
+    Disabled(&'static str),
+}
+
+#[derive(Debug, PartialEq)]
 pub enum Protocol {
     Text,
     Binary,
@@ -72,6 +78,7 @@ pub enum Command {
 #[derive(Debug, PartialEq)]
 pub enum Response {
     Help,
+    Protocols(Vec<ProtocolStatus>),
     Size(Coordinate, Coordinate),
     GetPixel(Coordinate, Coordinate, [u8; 3]),
 }
