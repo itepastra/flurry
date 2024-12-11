@@ -27,7 +27,7 @@ tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 
 [features]
-default = ["text", "binary", "auth"]
+default = ["text", "binary"]
 # utilities
 auth = ["dep:reqwest"]
 
