@@ -11,7 +11,7 @@ use super::{IOProtocol, Parser, Responder};
 const SIZE_BIN: u8 = 115;
 const HELP_BIN: u8 = 104;
 const GET_PX_BIN: u8 = 32;
-const SET_PX_BIN: u8 = 33;
+const SET_PX_PALETTE_BIN: u8 = 33;
 
 #[derive(Clone)]
 pub struct PaletteParser {
@@ -42,7 +42,7 @@ impl<R: AsyncBufRead + AsyncBufReadExt + std::marker::Unpin> Parser<R> for Palet
                     let vertical = reader.read_u16().await?;
                     Ok(Command::GetPixel(canvas, horizontal, vertical))
                 }
-                SET_PX_BIN => {
+                SET_PX_PALETTE_BIN => {
                     let canvas = reader.read_u8().await?;
                     let horizontal = reader.read_u16().await?;
                     let vertical = reader.read_u16().await?;
