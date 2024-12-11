@@ -3,6 +3,7 @@ use std::{
     sync::Arc,
 };
 
+use bytes::Buf;
 #[cfg(feature = "auth")]
 use reqwest::{Client, ClientBuilder};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
@@ -79,6 +80,8 @@ where
     counter: u64,
     #[cfg(feature = "auth")]
     auth_client: Client,
+    #[cfg(feature = "auth")]
+    user: u32,
 }
 
 impl<R, W> FlutClient<R, W>
@@ -162,6 +165,8 @@ where
             counter: 0,
             #[cfg(feature = "auth")]
             auth_client: ClientBuilder::new().https_only(true).build().unwrap(),
+            #[cfg(feature = "auth")]
+            user: 0,
         }
     }
 
@@ -181,15 +186,25 @@ where
             buf.clear();
             let token_length = self.reader.read_until(b'\n', &mut buf).await?;
 
-            if token_length < 100 {
-                let request = self
-                    .auth_client
-                    .post(AUTH_SERVER_URL)
-                    .body(buf)
-                    .build()
-                    .unwrap();
-                let response = self.auth_client.execute(request).await.unwrap();
+            if token_length > 100 {
+                return Err(Error::from(ErrorKind::PermissionDenied));
             }
+
+            let request = self
+                .auth_client
+                .post(AUTH_SERVER_URL)
+                .body(buf)
+                .build()
+                .unwrap();
+            let response = self.auth_client.execute(request).await.unwrap();
+            if response.status() != 200 {
+                return Err(Error::from(ErrorKind::PermissionDenied));
+            }
+
+            let user = response.bytes().await.unwrap().get_u32();
+
+            tracing::info!("User with id {user} authenticated");
+            self.user = user;
         }
         loop {
             match_parser!(parser: &self.parser.clone() => 'outer: loop {
