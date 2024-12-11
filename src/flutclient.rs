@@ -37,14 +37,14 @@ macro_rules! build_parser_type_enum {
 
         impl ParserTypes {
             pub fn get_status() -> Vec<ProtocolStatus> {
-                let mut protos = Vec::new();
+                vec![
                 $(
                     #[cfg(feature = $feat)]
-                    protos.push(ProtocolStatus::Enabled($feat));
+                    ProtocolStatus::Enabled($feat),
                     #[cfg(not(feature = $feat))]
-                    protos.push(ProtocolStatus::Disabled($feat));
+                    ProtocolStatus::Disabled($feat),
                 )*
-                protos
+                ]
             }
 
             pub fn announce() {
