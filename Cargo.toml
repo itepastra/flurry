@@ -25,6 +25,8 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 
 [features]
 default = ["text", "binary"]
+# contains all the parsers
+all = ["text", "binary"]
 text = ["dep:atoi_radix10"]
 binary = []
 

@@ -117,6 +117,8 @@ impl<R: AsyncBufRead + AsyncBufReadExt + std::marker::Unpin> Parser<R> for TextP
         if reader.read_line(&mut line).await.is_ok() {
             if line.starts_with("HELP") {
                 return Ok(Command::Help);
+            } else if line.starts_with("PROTOCOLS") {
+                return Ok(Command::Protocols);
             } else if line.starts_with("SIZE") {
                 return Ok(Command::Size(self.canvas));
             } else if line.starts_with("PX ") {
@@ -146,6 +148,23 @@ impl<W: AsyncWriteExt + std::marker::Unpin> Responder<W> for TextParser {
     async fn unparse(&self, response: Response, writer: &mut W) -> io::Result<()> {
         match response {
             Response::Help => writer.write_all(HELP_TEXT).await,
+            Response::Protocols(protos) => {
+                for protocol in protos {
+                    match protocol {
+                        crate::ProtocolStatus::Enabled(proto) => {
+                            writer
+                                .write_all(format!("Enabled: {}\n", proto).as_bytes())
+                                .await?;
+                        }
+                        crate::ProtocolStatus::Disabled(proto) => {
+                            writer
+                                .write_all(format!("Disabled: {}\n", proto).as_bytes())
+                                .await?;
+                        }
+                    }
+                }
+                Ok(())
+            }
             Response::Size(x, y) => writer.write_all(format!("SIZE {x} {y}\n").as_bytes()).await,
             Response::GetPixel(x, y, color) => {
                 writer
@@ -210,6 +229,20 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_px_set_w_parse_caps() {
+        let parser = TextParser::default();
+        let reader = tokio_test::io::Builder::new()
+            .read(b"PX 28283 29991 AB\n")
+            .build();
+        let mut bufreader = BufReader::new(reader);
+        let thingy = parser.parse(&mut bufreader).await;
+        assert_eq!(
+            thingy.unwrap(),
+            Command::SetPixel(0, 28283, 29991, Color::W8(0xAB))
+        );
+    }
+
+    #[tokio::test]
     async fn test_px_set_rgb_parse() {
         let parser = TextParser::default();
         let reader = tokio_test::io::Builder::new()
@@ -224,6 +257,20 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_px_set_rgb_parse_caps() {
+        let parser = TextParser::default();
+        let reader = tokio_test::io::Builder::new()
+            .read(b"PX 28283 29991 8800FA\n")
+            .build();
+        let mut bufreader = BufReader::new(reader);
+        let thingy = parser.parse(&mut bufreader).await;
+        assert_eq!(
+            thingy.unwrap(),
+            Command::SetPixel(0, 28283, 29991, Color::RGB24(0x88, 0x00, 0xfa))
+        );
+    }
+
+    #[tokio::test]
     async fn test_px_set_rgba_parse() {
         let parser = TextParser::default();
         let reader = tokio_test::io::Builder::new()
@@ -234,6 +281,20 @@ mod tests {
         assert_eq!(
             thingy.unwrap(),
             Command::SetPixel(0, 28283, 29991, Color::RGBA32(0x88, 0x00, 0xff, 0x28))
+        );
+    }
+
+    #[tokio::test]
+    async fn test_px_set_rgba_parse_caps() {
+        let parser = TextParser::default();
+        let reader = tokio_test::io::Builder::new()
+            .read(b"PX 28283 29991 AB0c3F88\n")
+            .build();
+        let mut bufreader = BufReader::new(reader);
+        let thingy = parser.parse(&mut bufreader).await;
+        assert_eq!(
+            thingy.unwrap(),
+            Command::SetPixel(0, 28283, 29991, Color::RGBA32(0xab, 0x0c, 0x3f, 0x88))
         );
     }
 

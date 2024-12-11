@@ -8,7 +8,9 @@ use std::{
 };
 
 use flurry::{
-    config::{GRID_LENGTH, HOST, IMAGE_SAVE_INTERVAL, JPEG_UPDATE_INTERVAL},
+    config::{
+        GRID_LENGTH, HOST, IMAGE_SAVE_INTERVAL, JPEG_UPDATE_INTERVAL, STDOUT_STATISTICS_INTERVAL,
+    },
     flutclient::{FlutClient, ParserTypes},
     grid::{self, Flut},
     webapi::WebApiContext,
@@ -20,7 +22,7 @@ use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _
 
 /// This function logs the current amount of changed pixels to stdout every second
 async fn pixel_change_stdout_log() -> AsyncResult<Never> {
-    let mut interval = tokio::time::interval(Duration::from_millis(1000));
+    let mut interval = tokio::time::interval(STDOUT_STATISTICS_INTERVAL);
     loop {
         interval.tick().await;
         let cnt = COUNTER.load(std::sync::atomic::Ordering::Relaxed);
