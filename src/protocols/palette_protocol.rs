@@ -103,4 +103,18 @@ impl<W: AsyncWriteExt + std::marker::Unpin> Responder<W> for PaletteParser {
 mod tests {
     use super::*;
     use tokio::io::BufReader;
+
+    #[tokio::test]
+    async fn test_palette_px_set_parse() {
+        let parser = PaletteParser::default();
+        let reader = tokio_test::io::Builder::new()
+            .read(&[SET_PX_PALETTE_BIN, 0x01, 0x69, 0x42, 0x42, 0x69, 0x82])
+            .build();
+        let mut bufreader = BufReader::new(reader);
+        let thingy = parser.parse(&mut bufreader).await.unwrap();
+        assert_eq!(
+            thingy,
+            Command::SetPixel(1, 0x6942, 0x4269, parser.colors[0x82].clone())
+        );
+    }
 }
