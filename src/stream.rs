@@ -28,6 +28,42 @@ impl Multipart {
     }
 }
 
+impl Multipart {
+    fn write_multipart_frame<T>(
+        obj: T,
+        boundary: Vec<u8>,
+        headers: HeaderMap,
+        first: bool,
+    ) -> Result<Vec<u8>, axum::Error>
+    where
+        T: IntoIterator<Item = u8>,
+    {
+        let mut frame_vec = Vec::new();
+        if first {
+            frame_vec.extend_from_slice(b"--");
+        } else {
+            frame_vec.extend_from_slice(b"\r\n--");
+        }
+        frame_vec.extend(boundary);
+        frame_vec.extend_from_slice(b"\r\n");
+        for (header_name, header_value) in headers {
+            match header_name {
+                Some(header) => {
+                    frame_vec.extend_from_slice(header.as_str().as_bytes());
+                    frame_vec.extend_from_slice(b": ");
+                    frame_vec.extend_from_slice(header_value.as_bytes());
+                    frame_vec.extend_from_slice(b"\r\n");
+                }
+                None => todo!(),
+            }
+        }
+        frame_vec.extend_from_slice(b"\r\n");
+        frame_vec.extend(obj);
+
+        Ok(frame_vec)
+    }
+}
+
 impl<T> StreamingFormat<T> for Multipart
 where
     T: Send + Sync + IntoIterator<Item = u8> + 'static,
@@ -37,40 +73,6 @@ where
         stream: futures::stream::BoxStream<'b, Result<T, axum::Error>>,
         _options: &'a axum_streams::StreamBodyAsOptions,
     ) -> futures::stream::BoxStream<'b, Result<axum::body::Bytes, axum::Error>> {
-        fn write_multipart_frame<T>(
-            obj: T,
-            boundary: Vec<u8>,
-            headers: HeaderMap,
-            first: bool,
-        ) -> Result<Vec<u8>, axum::Error>
-        where
-            T: IntoIterator<Item = u8>,
-        {
-            let mut frame_vec = Vec::new();
-            if first {
-                frame_vec.extend_from_slice(b"--");
-            } else {
-                frame_vec.extend_from_slice(b"\r\n--");
-            }
-            frame_vec.extend(boundary);
-            frame_vec.extend_from_slice(b"\r\n");
-            for (header_name, header_value) in headers {
-                match header_name {
-                    Some(header) => {
-                        frame_vec.extend_from_slice(header.as_str().as_bytes());
-                        frame_vec.extend_from_slice(b": ");
-                        frame_vec.extend_from_slice(header_value.as_bytes());
-                        frame_vec.extend_from_slice(b"\r\n");
-                    }
-                    None => todo!(),
-                }
-            }
-            frame_vec.extend_from_slice(b"\r\n");
-            frame_vec.extend(obj);
-
-            Ok(frame_vec)
-        }
-
         let boundary = self.boundary.clone();
         let headers = self.headers.clone();
         let first = self.first;
@@ -79,8 +81,12 @@ where
             stream.map(move |obj_res| match obj_res {
                 Err(e) => Err(e),
                 Ok(obj) => {
-                    let picture_framed =
-                        write_multipart_frame(obj, boundary.clone(), headers.clone(), first);
+                    let picture_framed = Multipart::write_multipart_frame(
+                        obj,
+                        boundary.clone(),
+                        headers.clone(),
+                        first,
+                    );
 
                     picture_framed.map(axum::body::Bytes::from)
                 }
