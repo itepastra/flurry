@@ -12,6 +12,7 @@ const SIZE_BIN: u8 = 115;
 const HELP_BIN: u8 = 104;
 const GET_PX_BIN: u8 = 32;
 const SET_PX_PALETTE_BIN: u8 = 33;
+#[cfg(feature = "palette")]
 const SET_PALETTE_COLOR: u8 = 34;
 
 #[derive(Clone)]
@@ -131,5 +132,31 @@ mod tests {
             thingy,
             Command::SetPixel(1, 0x6942, 0x4269, parser.colors[0x82].clone())
         );
+    }
+
+    #[cfg(feature = "palette")]
+    #[tokio::test]
+    async fn test_palette_set_palette_color_parse() {
+        let parser = PaletteParser::default();
+        let reader = tokio_test::io::Builder::new()
+            .read(&[SET_PALETTE_COLOR, 0x04, 0xfa, 0xbd, 0x2f])
+            .build();
+        let mut bufreader = BufReader::new(reader);
+        let thingy = parser.parse(&mut bufreader).await.unwrap();
+        assert_eq!(
+            thingy,
+            Command::ChangeColor(0x04, Color::RGB24(0xfa, 0xbd, 0x2f))
+        );
+    }
+
+    #[tokio::test]
+    async fn test_palette_set_color() {
+        let mut parser = PaletteParser::default();
+        parser.set_color(0x04, Color::RGB24(0xfa, 0xbd, 0x2f));
+        parser.set_color(0x13, Color::RGB24(0x23, 0x45, 0x67));
+        parser.set_color(0x69, Color::RGB24(0xb0, 0x07, 0x1e));
+        assert_eq!(parser.colors[0x04], Color::RGB24(0xfa, 0xbd, 0x2f));
+        assert_eq!(parser.colors[0x13], Color::RGB24(0x23, 0x45, 0x67));
+        assert_eq!(parser.colors[0x69], Color::RGB24(0xb0, 0x07, 0x1e));
     }
 }
