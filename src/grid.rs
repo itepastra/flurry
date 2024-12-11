@@ -159,30 +159,66 @@ mod tests {
     #[tokio::test]
     async fn test_grid_set() {
         let grid = Flut::init(3, 3, 0);
-        grid.set(1, 1, 255);
-        grid.set(2, 1, 256);
+        grid.set(
+            1,
+            1,
+            255,
+            #[cfg(feature = "auth")]
+            0,
+        );
+        grid.set(
+            2,
+            1,
+            256,
+            #[cfg(feature = "auth")]
+            0,
+        );
         assert_eq!(grid.cells.into_inner(), vec![0, 0, 0, 0, 255, 256, 0, 0, 0]);
     }
 
     #[tokio::test]
     async fn test_grid_set_out_of_range() {
         let grid = Flut::init(3, 3, 0);
-        grid.set(1, 1, 255);
-        grid.set(3, 1, 256);
+        grid.set(
+            1,
+            1,
+            255,
+            #[cfg(feature = "auth")]
+            0,
+        );
+        grid.set(
+            3,
+            1,
+            256,
+            #[cfg(feature = "auth")]
+            0,
+        );
         assert_eq!(grid.cells.into_inner(), vec![0, 0, 0, 0, 255, 0, 0, 0, 0]);
     }
 
     #[tokio::test]
     async fn test_grid_get() {
         let grid = Flut::init(3, 3, 0);
-        grid.set(1, 2, 222);
+        grid.set(
+            1,
+            2,
+            222,
+            #[cfg(feature = "auth")]
+            0,
+        );
         assert_eq!(grid.get(1, 2), Some(&222));
     }
 
     #[tokio::test]
     async fn test_grid_get_out_of_range() {
         let grid = Flut::init(3, 3, 0);
-        grid.set(3, 1, 256);
+        grid.set(
+            3,
+            1,
+            256,
+            #[cfg(feature = "auth")]
+            0,
+        );
         assert_eq!(grid.get(3, 1), None);
         assert_eq!(grid.get(1, 2), Some(&0));
     }
