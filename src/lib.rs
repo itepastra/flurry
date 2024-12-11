@@ -68,6 +68,7 @@ pub enum Protocol {
 #[derive(Debug, PartialEq)]
 pub enum Command {
     Help,
+    Protocols,
     Size(Canvas),
     GetPixel(Canvas, Coordinate, Coordinate),
     SetPixel(Canvas, Coordinate, Coordinate, Color),
