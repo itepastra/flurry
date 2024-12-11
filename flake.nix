@@ -84,9 +84,12 @@
               ffpkgs.rust-src
               ffpkgs.rustc
               ffpkgs.rustfmt
-              pkgs.gcc
               pkgs.wgo
               tsunami.packages.${system}.tsunami
+              pkgs.pkg-config
+            ];
+            LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
+              pkgs.openssl
             ];
           };
         }
