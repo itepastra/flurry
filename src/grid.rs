@@ -3,12 +3,10 @@ use std::{
     sync::{RwLock, RwLockReadGuard},
 };
 
+#[cfg(feature = "auth")]
+use crate::blame::{BlameMap, User};
+use crate::Coordinate;
 use image::{GenericImageView, Rgb};
-
-use crate::{
-    blame::{BlameMap, User},
-    Coordinate,
-};
 
 pub trait Grid<I, V> {
     fn get(&self, x: I, y: I) -> Option<&V>;

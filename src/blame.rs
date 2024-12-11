@@ -1,17 +1,23 @@
+#[cfg(feature = "auth")]
 use std::cell::SyncUnsafeCell;
 
+#[cfg(feature = "auth")]
 use image::{GenericImageView, Rgba};
 
+#[cfg(feature = "auth")]
 use crate::Coordinate;
 
+#[cfg(feature = "auth")]
 pub(crate) type User = u32;
 
+#[cfg(feature = "auth")]
 pub(crate) struct BlameMap {
     size_x: usize,
     size_y: usize,
     cells: SyncUnsafeCell<Vec<User>>,
 }
 
+#[cfg(feature = "auth")]
 impl BlameMap {
     fn index(&self, x: Coordinate, y: Coordinate) -> Option<usize> {
         let x = x as usize;
@@ -44,6 +50,7 @@ impl BlameMap {
     }
 }
 
+#[cfg(feature = "auth")]
 impl GenericImageView for BlameMap {
     type Pixel = Rgba<u8>;
 

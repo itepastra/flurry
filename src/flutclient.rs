@@ -3,20 +3,22 @@ use std::{
     sync::Arc,
 };
 
-use bytes::Buf;
 #[cfg(feature = "auth")]
-use reqwest::{Client, ClientBuilder};
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
-
+use crate::{blame::User, config::AUTH_SERVER_URL};
 use crate::{
-    blame::User,
-    config::AUTH_SERVER_URL,
     get_pixel,
     grid::{self, Flut},
     increment_counter,
     protocols::{BinaryParser, IOProtocol, Parser, Responder, TextParser},
     set_pixel_rgba, Canvas, Color, Command, Coordinate, Protocol, Response,
 };
+#[cfg(feature = "auth")]
+use bytes::Buf;
+#[cfg(feature = "auth")]
+use reqwest::{Client, ClientBuilder};
+#[cfg(feature = "auth")]
+use tokio::io::AsyncBufReadExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
 
 macro_rules! build_parser_type_enum {
     ($($name:ident: $t:ty: $feat:expr,)*) => {
