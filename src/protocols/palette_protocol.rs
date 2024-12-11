@@ -12,10 +12,17 @@ const SIZE_BIN: u8 = 115;
 const HELP_BIN: u8 = 104;
 const GET_PX_BIN: u8 = 32;
 const SET_PX_PALETTE_BIN: u8 = 33;
+const SET_PALETTE_COLOR: u8 = 34;
 
 #[derive(Clone)]
 pub struct PaletteParser {
     colors: [Color; 256],
+}
+
+impl PaletteParser {
+    pub fn set_color(&mut self, index: u8, color: Color) {
+        self.colors[index as usize] = color;
+    }
 }
 
 impl Default for PaletteParser {
@@ -50,6 +57,14 @@ impl<R: AsyncBufRead + AsyncBufReadExt + std::marker::Unpin> Parser<R> for Palet
                     Ok(Command::SetPixel(canvas, horizontal, vertical, unsafe {
                         self.colors.get_unchecked(color as usize).clone()
                     }))
+                }
+                #[cfg(feature = "palette")]
+                SET_PALETTE_COLOR => {
+                    let index = reader.read_u8().await?;
+                    let r = reader.read_u8().await?;
+                    let g = reader.read_u8().await?;
+                    let b = reader.read_u8().await?;
+                    Ok(Command::ChangeColor(index, Color::RGB24(r, g, b)))
                 }
                 _ => {
                     tracing::error!("received illegal command: {command}");

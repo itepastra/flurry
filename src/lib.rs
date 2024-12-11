@@ -68,6 +68,8 @@ pub enum Command {
     SetPixel(Canvas, Coordinate, Coordinate, Color),
     ChangeCanvas(Canvas),
     ChangeProtocol(Protocol),
+    #[cfg(feature = "palette")]
+    ChangeColor(u8, Color),
 }
 
 #[derive(Debug, PartialEq)]

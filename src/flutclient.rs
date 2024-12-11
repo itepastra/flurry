@@ -136,6 +136,14 @@ where
         match_parser!(parser: self.parser => parser.change_canvas(canvas))
     }
 
+    #[cfg(feature = "palette")]
+    fn change_color(&mut self, index: u8, color: Color) -> () {
+        match &mut self.parser {
+            ParserTypes::PaletteParser(ref mut parser) => parser.set_color(index, color),
+            _ => {}
+        };
+    }
+
     async fn change_protocol(&mut self, protocol: &Protocol) -> io::Result<()> {
         match protocol {
             #[cfg(feature = "text")]
@@ -196,6 +204,10 @@ where
                         Ok(Command::ChangeProtocol(protocol)) => {
                             self.change_protocol(&protocol).await?;
                             break 'outer;
+                        }
+                        #[cfg(feature = "palette")]
+                        Ok(Command::ChangeColor(index, color)) => {
+                            self.change_color(index, color);
                         }
                         Err(err) if err.kind() == ErrorKind::UnexpectedEof => {
                 increment_counter(self.counter);
