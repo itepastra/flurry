@@ -28,7 +28,7 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: nightly
-      - run: cargo test
+      - run: cargo test --features all
 
 
   clippy:
@@ -42,4 +42,4 @@ jobs:
         with:
           toolchain: nightly
           components: clippy
-      - run: cargo clippy --tests -- -Dclippy::all
+      - run: cargo clippy --features all --tests -- -Dclippy::all
