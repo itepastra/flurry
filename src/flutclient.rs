@@ -5,11 +5,17 @@ use std::{
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
 
+#[cfg(feature = "binary")]
+use crate::protocols::BinaryParser;
+#[cfg(feature = "palette")]
+use crate::protocols::PaletteParser;
+#[cfg(feature = "text")]
+use crate::protocols::TextParser;
 use crate::{
     get_pixel,
     grid::{self, Flut},
     increment_counter,
-    protocols::{BinaryParser, IOProtocol, PaletteParser, Parser, Responder, TextParser},
+    protocols::{IOProtocol, Parser, Responder},
     set_pixel_rgba, Canvas, Color, Command, Coordinate, Protocol, Response,
 };
 
