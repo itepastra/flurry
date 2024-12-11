@@ -7,6 +7,7 @@ use crate::{Canvas, Color, Command, Response};
 use super::{IOProtocol, Parser, Responder};
 
 const SIZE_BIN: u8 = 115;
+const PROTOCOLS_BIN: u8 = 116;
 const HELP_BIN: u8 = 104;
 const GET_PX_BIN: u8 = 32;
 const SET_PX_RGB_BIN: u8 = 128;
@@ -22,6 +23,7 @@ impl<R: AsyncBufRead + AsyncBufReadExt + std::marker::Unpin> Parser<R> for Binar
         match fst {
             Ok(command) => match command {
                 HELP_BIN => Ok(Command::Help),
+                PROTOCOLS_BIN => Ok(Command::Protocols),
                 SIZE_BIN => {
                     let canvas = reader.read_u8().await?;
                     Ok(Command::Size(canvas))
