@@ -7,6 +7,7 @@ use crate::{Canvas, Color, Command, Response};
 use super::{IOProtocol, Parser, Responder};
 
 const SIZE_BIN: u8 = 115;
+const PROTOCOLS_BIN: u8 = 116;
 const HELP_BIN: u8 = 104;
 const GET_PX_BIN: u8 = 32;
 const SET_PX_RGB_BIN: u8 = 128;
@@ -22,6 +23,7 @@ impl<R: AsyncBufRead + AsyncBufReadExt + std::marker::Unpin> Parser<R> for Binar
         match fst {
             Ok(command) => match command {
                 HELP_BIN => Ok(Command::Help),
+                PROTOCOLS_BIN => Ok(Command::Protocols),
                 SIZE_BIN => {
                     let canvas = reader.read_u8().await?;
                     Ok(Command::Size(canvas))
@@ -105,6 +107,23 @@ To set a pixel using RGB, use ({SET_PX_RGB_BIN:02X}) (u8 canvas) (x as u16_le) (
 ",
 );
                 writer.write_all(help_text.as_bytes()).await
+            }
+            Response::Protocols(protos) => {
+                for protocol in protos {
+                    match protocol {
+                        crate::ProtocolStatus::Enabled(proto) => {
+                            writer
+                                .write_all(format!("Enabled: {}\n", proto).as_bytes())
+                                .await?;
+                        }
+                        crate::ProtocolStatus::Disabled(proto) => {
+                            writer
+                                .write_all(format!("Disabled: {}\n", proto).as_bytes())
+                                .await?;
+                        }
+                    }
+                }
+                Ok(())
             }
             Response::Size(x, y) => {
                 writer.write_u16(x).await?;

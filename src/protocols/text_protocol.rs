@@ -117,6 +117,8 @@ impl<R: AsyncBufRead + AsyncBufReadExt + std::marker::Unpin> Parser<R> for TextP
         if reader.read_line(&mut line).await.is_ok() {
             if line.starts_with("HELP") {
                 return Ok(Command::Help);
+            } else if line.starts_with("PROTOCOLS") {
+                return Ok(Command::Protocols);
             } else if line.starts_with("SIZE") {
                 return Ok(Command::Size(self.canvas));
             } else if line.starts_with("PX ") {
@@ -146,6 +148,23 @@ impl<W: AsyncWriteExt + std::marker::Unpin> Responder<W> for TextParser {
     async fn unparse(&self, response: Response, writer: &mut W) -> io::Result<()> {
         match response {
             Response::Help => writer.write_all(HELP_TEXT).await,
+            Response::Protocols(protos) => {
+                for protocol in protos {
+                    match protocol {
+                        crate::ProtocolStatus::Enabled(proto) => {
+                            writer
+                                .write_all(format!("Enabled: {}\n", proto).as_bytes())
+                                .await?;
+                        }
+                        crate::ProtocolStatus::Disabled(proto) => {
+                            writer
+                                .write_all(format!("Disabled: {}\n", proto).as_bytes())
+                                .await?;
+                        }
+                    }
+                }
+                Ok(())
+            }
             Response::Size(x, y) => writer.write_all(format!("SIZE {x} {y}\n").as_bytes()).await,
             Response::GetPixel(x, y, color) => {
                 writer
