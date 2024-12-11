@@ -5,19 +5,19 @@ edition = "2021"
 
 [dependencies]
 async-trait = "0.1.83"
-atoi_radix10 = "0.0.1"
+atoi_radix10 = { version = "0.0.1", optional = true }
 axum = { version = "0.7.7", features = ["ws"] }
+axum-embed = "0.1.0"
 axum-extra = { version = "0.9.4", features = ["typed-header"] }
 axum-streams = "0.19.0"
 bytes = "1.6.0"
 chrono = "0.4.38"
-debug_print = "1.0.0"
 futures = "0.3.31"
-futures-util = { version = "0.3.31", features = ["sink", "std"] }
 headers = "0.4.0"
 image = "0.25.2"
 rand = "*"
 reqwest = { version = "0.12.9", optional = true }
+rust-embed = "8.5.0"
 serde = { version = "1.0.210", features = ["derive"] }
 tokio = { version = "1.38", features = ["full"] }
 tokio-stream = "0.1.16"
@@ -28,11 +28,12 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 
 [features]
 default = ["text", "binary"]
+# contains all the parsers
+all = ["text", "binary"]
 # utilities
 auth = ["dep:reqwest"]
-
 # protocols
-text = []
+text = ["dep:atoi_radix10"]
 binary = []
 
 [dev-dependencies]

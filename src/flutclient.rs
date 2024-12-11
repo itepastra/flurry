@@ -10,7 +10,7 @@ use crate::{
     grid::{self, Flut},
     increment_counter,
     protocols::{BinaryParser, IOProtocol, Parser, Responder, TextParser},
-    set_pixel_rgba, Canvas, Color, Command, Coordinate, Protocol, Response,
+    set_pixel_rgba, Canvas, Color, Command, Coordinate, Protocol, ProtocolStatus, Response,
 };
 #[cfg(feature = "auth")]
 use bytes::Buf;
@@ -33,16 +33,27 @@ macro_rules! build_parser_type_enum {
 
         impl std::default::Default for ParserTypes {
             // add code here
+            #[allow(unreachable_code)]
             fn default() -> Self {
                 $(
                     #[cfg(feature = $feat)]
-                    #[allow(unreachable_code)]
                     return ParserTypes::$name(<$t>::default());
                 )*
             }
         }
 
         impl ParserTypes {
+            pub fn get_status() -> Vec<ProtocolStatus> {
+                vec![
+                $(
+                    #[cfg(feature = $feat)]
+                    ProtocolStatus::Enabled($feat),
+                    #[cfg(not(feature = $feat))]
+                    ProtocolStatus::Disabled($feat),
+                )*
+                ]
+            }
+
             pub fn announce() {
                 $(
                     #[cfg(feature = $feat)]
@@ -95,6 +106,14 @@ where
     async fn help_command(&mut self) -> io::Result<()> {
         match_parser!(parser: self.parser => parser.unparse(Response::Help, &mut self.writer).await?);
 
+        self.writer.flush().await?;
+        Ok(())
+    }
+
+    async fn protocols_command(&mut self) -> io::Result<()> {
+        match_parser! {
+            parser: self.parser => parser.unparse(Response::Protocols(ParserTypes::get_status()), &mut self.writer).await?
+        };
         self.writer.flush().await?;
         Ok(())
     }
@@ -224,6 +243,7 @@ where
                     match parsed {
                         Ok(Command::Help) => self.help_command().await?,
                         Ok(Command::Size(canvas)) => self.size_command(canvas).await?,
+                        Ok(Command::Protocols) => self.protocols_command().await?,
                         Ok(Command::GetPixel(canvas, x, y)) => self.get_pixel_command(canvas, x, y).await?,
                         Ok(Command::SetPixel(canvas, x, y, color)) => self.set_pixel_command(canvas, x, y, &color),
                         Ok(Command::ChangeCanvas(canvas)) => {
@@ -235,9 +255,14 @@ where
                             break 'outer;
                         }
                         Err(err) if err.kind() == ErrorKind::UnexpectedEof => {
-                increment_counter(self.counter);
-                            return Ok(())},
-                        Err(e) => return Err(e),
+                            tracing::error!("Process socket got error: {err:?}");
+                            increment_counter(self.counter);
+                            return Ok(())
+                        }
+                        Err(e) => {
+                            tracing::error!("Process socket got error: {e:?}");
+                            return Err(e)
+                        }
                     }
                 }
                 increment_counter(self.counter);

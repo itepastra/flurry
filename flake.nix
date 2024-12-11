@@ -60,6 +60,7 @@
                     ./Cargo.lock
                     ./Cargo.toml
                     ./src
+                    ./assets
                   ];
                 };
               };
