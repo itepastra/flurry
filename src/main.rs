@@ -7,9 +7,10 @@ use std::{
     time::Duration,
 };
 
-use chrono::Local;
 use flurry::{
-    config::{GRID_LENGTH, HOST, IMAGE_SAVE_INTERVAL, JPEG_UPDATE_INTERVAL},
+    config::{
+        GRID_LENGTH, HOST, IMAGE_SAVE_INTERVAL, JPEG_UPDATE_INTERVAL, STDOUT_STATISTICS_INTERVAL,
+    },
     flutclient::{FlutClient, ParserTypes},
     grid::{self, Flut},
     webapi::WebApiContext,
@@ -21,7 +22,7 @@ use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _
 
 /// This function logs the current amount of changed pixels to stdout every second
 async fn pixel_change_stdout_log() -> AsyncResult<Never> {
-    let mut interval = tokio::time::interval(Duration::from_millis(1000));
+    let mut interval = tokio::time::interval(STDOUT_STATISTICS_INTERVAL);
     loop {
         interval.tick().await;
         let cnt = COUNTER.load(std::sync::atomic::Ordering::Relaxed);
@@ -39,13 +40,16 @@ async fn save_image_frames(
     grids: Arc<[grid::Flut<u32>; GRID_LENGTH]>,
     duration: Duration,
 ) -> AsyncResult<Never> {
-    let base_dir = Path::new("./recordings");
     let mut timer = interval(duration);
+    let base_dir = Path::new("./recordings");
     create_dir_all(base_dir)?;
     loop {
         timer.tick().await;
         for grid in grids.as_ref() {
-            let p = base_dir.join(format!("{}", Local::now().format("%Y-%m-%d_%H-%M-%S.jpg")));
+            let p = base_dir.join(format!(
+                "{}",
+                chrono::Local::now().format("%Y-%m-%d_%H-%M-%S.jpg")
+            ));
             let mut file_writer = File::create(p)?;
 
             file_writer.write_all(&grid.read_jpg_buffer())?;

@@ -6,6 +6,7 @@ pub const WEB_HOST: &str = "127.0.0.1:3000";
 pub const IMAGE_SAVE_INTERVAL: Duration = Duration::from_secs(5);
 pub const JPEG_UPDATE_INTERVAL: Duration = Duration::from_millis(17);
 pub const WEB_UPDATE_INTERVAL: Duration = Duration::from_millis(50);
+pub const STDOUT_STATISTICS_INTERVAL: Duration = Duration::from_millis(5000);
 
 pub const HELP_TEXT: &[u8] = b"Flurry is a pixelflut implementation, this means you can use commands to get and set pixels in the canvas
 SIZE returns the size of the canvas
