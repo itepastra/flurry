@@ -197,9 +197,14 @@ where
                             break 'outer;
                         }
                         Err(err) if err.kind() == ErrorKind::UnexpectedEof => {
-                increment_counter(self.counter);
-                            return Ok(())},
-                        Err(e) => return Err(e),
+                            tracing::error!("Process socket got error: {err:?}");
+                            increment_counter(self.counter);
+                            return Ok(())
+                        }
+                        Err(e) => {
+                            tracing::error!("Process socket got error: {e:?}");
+                            return Err(e)
+                        }
                     }
                 }
                 increment_counter(self.counter);

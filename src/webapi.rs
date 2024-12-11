@@ -10,6 +10,7 @@ use axum::{
 use axum_extra::TypedHeader;
 use axum_streams::StreamBodyAs;
 use futures::{never::Never, stream::repeat_with, Stream};
+use rust_embed::RustEmbed;
 use serde::Deserialize;
 use tokio::net::TcpListener;
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
@@ -21,14 +22,24 @@ use crate::{
     AsyncResult,
 };
 
+#[derive(RustEmbed, Clone)]
+#[folder = "assets/"]
+struct Assets;
+
 #[derive(Clone)]
 pub struct WebApiContext {
     pub grids: Arc<[grid::Flut<u32>]>,
 }
 
 pub async fn serve(ctx: WebApiContext) -> AsyncResult<Never> {
+    let assets = axum_embed::ServeEmbed::<Assets>::with_parameters(
+        Some("404.html".to_string()),
+        axum_embed::FallbackBehavior::NotFound,
+        Some("index.html".to_string()),
+    );
     let app = Router::new()
         .route("/imgstream", any(image_stream))
+        .nest_service("/", assets)
         .with_state(ctx)
         // logging middleware
         .layer(
