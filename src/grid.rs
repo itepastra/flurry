@@ -61,7 +61,15 @@ impl<T> Flut<T> {
         Some((y * self.size_x) + x)
     }
     pub fn read_jpg_buffer(&self) -> RwLockReadGuard<'_, Vec<u8>> {
-        self.jpgbuf.read().expect("RWlock didn't exit nicely")
+        self.jpgbuf
+            .read()
+            .expect("canvas RWlock didn't exit nicely")
+    }
+    #[cfg(feature = "auth")]
+    pub fn read_blame_buffer(&self) -> RwLockReadGuard<'_, Vec<u8>> {
+        self.blamebuf
+            .read()
+            .expect("blame RWlock didn't exit nicely")
     }
 }
 
