@@ -136,30 +136,37 @@ where
         match_parser!(parser: self.parser => parser.change_canvas(canvas))
     }
 
-    fn change_protocol(&mut self, protocol: &Protocol) {
+    async fn change_protocol(&mut self, protocol: &Protocol) -> io::Result<()> {
         match protocol {
             #[cfg(feature = "text")]
             Protocol::Text => self.parser = ParserTypes::TextParser(TextParser::default()),
             #[cfg(not(feature = "text"))]
             Protocol::Text => {
-                self.writer.write(b"feature \"text\" is not enabled.");
-                self.writer.flush();
+                self.writer
+                    .write_all(b"feature \"text\" is not enabled.")
+                    .await?;
+                self.writer.flush().await?;
             }
             #[cfg(feature = "binary")]
             Protocol::Binary => self.parser = ParserTypes::BinaryParser(BinaryParser::default()),
             #[cfg(not(feature = "binary"))]
             Protocol::Binary => {
-                self.writer.write(b"feature \"binary\" is not enabled.");
-                self.writer.flush();
+                self.writer
+                    .write_all(b"feature \"binary\" is not enabled.")
+                    .await?;
+                self.writer.flush().await?;
             }
             #[cfg(feature = "palette")]
-            Protocol::Palette => self.parser = ParserTypes::Palette(PaletteParser::default()),
+            Protocol::Palette => self.parser = ParserTypes::PaletteParser(PaletteParser::default()),
             #[cfg(not(feature = "palette"))]
             Protocol::Palette => {
-                self.writer.write(b"feature \"binary\" is not enabled.");
-                self.writer.flush();
+                self.writer
+                    .write_all(b"feature \"binary\" is not enabled.")
+                    .await?;
+                self.writer.flush().await?;
             }
         }
+        Ok(())
     }
 
     pub fn new(reader: R, writer: W, grids: Arc<[grid::Flut<u32>]>) -> Self {
@@ -187,7 +194,7 @@ where
                             break 'outer;
                         }
                         Ok(Command::ChangeProtocol(protocol)) => {
-                            self.change_protocol(&protocol);
+                            self.change_protocol(&protocol).await?;
                             break 'outer;
                         }
                         Err(err) if err.kind() == ErrorKind::UnexpectedEof => {
