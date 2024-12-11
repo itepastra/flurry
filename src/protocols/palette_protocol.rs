@@ -1,6 +1,7 @@
 use std::io::{self, Error, ErrorKind};
 
 use image::EncodableLayout;
+use rand::random;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt};
 
 use crate::{Canvas, Color, Command, Response};
@@ -20,7 +21,7 @@ pub struct PaletteParser {
 impl Default for PaletteParser {
     fn default() -> Self {
         PaletteParser {
-            colors: [const { Color::RGB24(0, 0, 0) }; 256],
+            colors: [0; 256].map(|_| random()),
         }
     }
 }
