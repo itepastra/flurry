@@ -16,7 +16,7 @@ use crate::{
     grid::{self, Flut},
     increment_counter,
     protocols::{IOProtocol, Parser, Responder},
-    set_pixel_rgba, Canvas, Color, Command, Coordinate, Protocol, Response,
+    set_pixel_rgba, Canvas, Color, Command, Coordinate, Protocol, ProtocolStatus, Response,
 };
 
 macro_rules! build_parser_type_enum {
@@ -42,6 +42,17 @@ macro_rules! build_parser_type_enum {
         }
 
         impl ParserTypes {
+            pub fn get_status() -> Vec<ProtocolStatus> {
+                vec![
+                $(
+                    #[cfg(feature = $feat)]
+                    ProtocolStatus::Enabled($feat),
+                    #[cfg(not(feature = $feat))]
+                    ProtocolStatus::Disabled($feat),
+                )*
+                ]
+            }
+
             pub fn announce() {
                 $(
                     #[cfg(feature = $feat)]
@@ -91,6 +102,14 @@ where
     async fn help_command(&mut self) -> io::Result<()> {
         match_parser!(parser: self.parser => parser.unparse(Response::Help, &mut self.writer).await?);
 
+        self.writer.flush().await?;
+        Ok(())
+    }
+
+    async fn protocols_command(&mut self) -> io::Result<()> {
+        match_parser! {
+            parser: self.parser => parser.unparse(Response::Protocols(ParserTypes::get_status()), &mut self.writer).await?
+        };
         self.writer.flush().await?;
         Ok(())
     }
@@ -187,6 +206,7 @@ where
                     match parsed {
                         Ok(Command::Help) => self.help_command().await?,
                         Ok(Command::Size(canvas)) => self.size_command(canvas).await?,
+                        Ok(Command::Protocols) => self.protocols_command().await?,
                         Ok(Command::GetPixel(canvas, x, y)) => self.get_pixel_command(canvas, x, y).await?,
                         Ok(Command::SetPixel(canvas, x, y, color)) => self.set_pixel_command(canvas, x, y, &color),
                         Ok(Command::ChangeCanvas(canvas)) => {
