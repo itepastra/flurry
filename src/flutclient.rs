@@ -9,6 +9,7 @@ use reqwest::{Client, ClientBuilder};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
 
 use crate::{
+    blame::User,
     config::AUTH_SERVER_URL,
     get_pixel,
     grid::{self, Flut},
@@ -81,7 +82,7 @@ where
     #[cfg(feature = "auth")]
     auth_client: Client,
     #[cfg(feature = "auth")]
-    user: u32,
+    user: User,
 }
 
 impl<R, W> FlutClient<R, W>
@@ -129,7 +130,15 @@ where
             }
             Color::W8(white) => u32::from_be_bytes([*white, *white, *white, 0xff]),
         };
-        set_pixel_rgba(self.grids.as_ref(), canvas, x, y, c);
+        set_pixel_rgba(
+            self.grids.as_ref(),
+            canvas,
+            x,
+            y,
+            c,
+            #[cfg(feature = "auth")]
+            self.user,
+        );
         self.counter += 1;
     }
 

@@ -5,13 +5,16 @@ use std::{
 
 use image::{GenericImageView, Rgb};
 
-use crate::Coordinate;
+use crate::{
+    blame::{BlameMap, User},
+    Coordinate,
+};
 
 pub trait Grid<I, V> {
     fn get(&self, x: I, y: I) -> Option<&V>;
     #[allow(dead_code)]
     fn get_unchecked(&self, x: I, y: I) -> &V;
-    fn set(&self, x: I, y: I, value: V);
+    fn set(&self, x: I, y: I, value: V, #[cfg(feature = "auth")] user: User);
 }
 
 pub struct Flut<T> {
@@ -19,6 +22,10 @@ pub struct Flut<T> {
     size_y: usize,
     cells: SyncUnsafeCell<Vec<T>>,
     jpgbuf: RwLock<Vec<u8>>,
+    #[cfg(feature = "auth")]
+    blamebuf: RwLock<Vec<u8>>,
+    #[cfg(feature = "auth")]
+    blame: BlameMap,
 }
 
 impl<T: Clone> Flut<T> {
@@ -32,6 +39,10 @@ impl<T: Clone> Flut<T> {
             size_y,
             cells: vec.into(),
             jpgbuf: RwLock::new(Vec::new()),
+            #[cfg(feature = "auth")]
+            blamebuf: RwLock::new(Vec::new()),
+            #[cfg(feature = "auth")]
+            blame: BlameMap::new(size_x, size_y),
         }
     }
 
@@ -60,11 +71,13 @@ impl<T> Grid<Coordinate, T> for Flut<T> {
             .map(|idx| unsafe { &(*self.cells.get())[idx] })
     }
 
-    fn set(&self, x: Coordinate, y: Coordinate, value: T) {
+    fn set(&self, x: Coordinate, y: Coordinate, value: T, #[cfg(feature = "auth")] user: User) {
         match self.index(x, y) {
             None => (),
             Some(idx) => unsafe { (*self.cells.get())[idx] = value },
         }
+        #[cfg(feature = "auth")]
+        self.blame.set_blame(x, y, user);
     }
 
     fn get_unchecked(&self, x: Coordinate, y: Coordinate) -> &T {
@@ -97,6 +110,21 @@ impl Flut<u32> {
         match subimage.write_with_encoder(encoder) {
             Ok(_) => {}
             Err(err) => tracing::error!("Error writing jpeg buffer: {:?}", err),
+        }
+    }
+
+    #[cfg(feature = "auth")]
+    pub fn update_blame_buffer(&self) {
+        let mut blamebuf = self.blamebuf.write().expect("Could not get write RWlock");
+        blamebuf.clear();
+        let encoder = image::codecs::png::PngEncoder::new(&mut *blamebuf);
+        let subimage = self
+            .blame
+            .view(0, 0, self.width(), self.height())
+            .to_image();
+        match subimage.write_with_encoder(encoder) {
+            Ok(_) => {}
+            Err(err) => tracing::error!("Error writing png buffer: {:?}", err),
         }
     }
 }
