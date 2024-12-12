@@ -8,27 +8,15 @@ use std::{
 };
 
 use flurry::{
-    config::{
-        GRID_LENGTH, HOST, IMAGE_SAVE_INTERVAL, JPEG_UPDATE_INTERVAL, STDOUT_STATISTICS_INTERVAL,
-    },
+    config::{GRID_LENGTH, HOST, IMAGE_SAVE_INTERVAL, JPEG_UPDATE_INTERVAL},
     flutclient::{FlutClient, ParserTypes},
     grid::{self, Flut},
     webapi::WebApiContext,
-    AsyncResult, COUNTER,
+    AsyncResult,
 };
 use futures::never::Never;
 use tokio::{net::TcpListener, time::interval, try_join};
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
-
-/// This function logs the current amount of changed pixels to stdout every second
-async fn pixel_change_stdout_log() -> AsyncResult<Never> {
-    let mut interval = tokio::time::interval(STDOUT_STATISTICS_INTERVAL);
-    loop {
-        interval.tick().await;
-        let cnt = COUNTER.load(std::sync::atomic::Ordering::Relaxed);
-        tracing::info!("{cnt} pixels changed");
-    }
-}
 
 /// This function starts a timer that saves the current grid state every `duration`.
 /// These images may then be used for moderation or timelapses
@@ -126,7 +114,6 @@ async fn main() {
     };
     tracing::info!("Started TCP listener on {HOST}");
 
-    let pixel_logger = tokio::spawn(pixel_change_stdout_log());
     let snapshots = tokio::spawn(save_image_frames(grids.clone(), IMAGE_SAVE_INTERVAL));
     let pixelflut_server = tokio::spawn(handle_flut(flut_listener, grids.clone()));
     let jpeg_update_loop = tokio::spawn(jpeg_update_loop(grids.clone()));
@@ -135,7 +122,6 @@ async fn main() {
     }));
 
     let res = try_join! {
-        pixel_logger,
         snapshots,
         pixelflut_server,
         jpeg_update_loop,
