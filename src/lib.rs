@@ -21,6 +21,7 @@ pub type Canvas = u8;
 pub type Coordinate = u16;
 
 pub static COUNTER: AtomicU64 = AtomicU64::new(0);
+pub static CLIENTS: AtomicU64 = AtomicU64::new(0);
 
 pub type AsyncResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
