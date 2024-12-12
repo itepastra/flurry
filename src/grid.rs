@@ -1,5 +1,6 @@
 use std::{
     cell::SyncUnsafeCell,
+    hash::{DefaultHasher, Hash, Hasher},
     sync::{RwLock, RwLockReadGuard},
 };
 
@@ -18,6 +19,7 @@ pub struct Flut<T> {
     size_x: usize,
     size_y: usize,
     cells: SyncUnsafeCell<Vec<T>>,
+    last_hash: SyncUnsafeCell<u64>,
     jpgbuf: RwLock<Vec<u8>>,
 }
 
@@ -31,6 +33,7 @@ impl<T: Clone> Flut<T> {
             size_x,
             size_y,
             cells: vec.into(),
+            last_hash: 0.into(),
             jpgbuf: RwLock::new(Vec::new()),
         }
     }
@@ -89,7 +92,21 @@ impl GenericImageView for Flut<u32> {
 }
 
 impl Flut<u32> {
+    pub fn check_changed(&self) -> bool {
+        let previous = unsafe { *self.last_hash.get() };
+        let mut hasher = DefaultHasher::new();
+        unsafe { (*self.cells.get()).hash(&mut hasher) };
+        if hasher.finish() == previous {
+            return false;
+        }
+        unsafe { *self.last_hash.get() = hasher.finish() }
+        true
+    }
+
     pub fn update_jpg_buffer(&self) {
+        if !self.check_changed() {
+            return;
+        }
         let mut jpgbuf = self.jpgbuf.write().expect("Could not get write RWlock");
         jpgbuf.clear();
         let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut *jpgbuf, 50);
