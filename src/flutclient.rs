@@ -5,11 +5,17 @@ use std::{
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
 
+#[cfg(feature = "binary")]
+use crate::protocols::BinaryParser;
+#[cfg(feature = "palette")]
+use crate::protocols::PaletteParser;
+#[cfg(feature = "text")]
+use crate::protocols::TextParser;
 use crate::{
     get_pixel,
     grid::{self, Flut},
     increment_counter,
-    protocols::{BinaryParser, IOProtocol, Parser, Responder, TextParser},
+    protocols::{IOProtocol, Parser, Responder},
     set_pixel_rgba, Canvas, Color, Command, Coordinate, Protocol, ProtocolStatus, Response,
 };
 
@@ -73,6 +79,7 @@ macro_rules! build_parser_type_enum {
 build_parser_type_enum! {
     TextParser: TextParser: "text",
     BinaryParser: BinaryParser: "binary",
+    PaletteParser: PaletteParser: "palette",
 }
 
 pub struct FlutClient<R, W>
@@ -148,23 +155,45 @@ where
         match_parser!(parser: self.parser => parser.change_canvas(canvas))
     }
 
-    fn change_protocol(&mut self, protocol: &Protocol) {
+    #[cfg(feature = "palette")]
+    fn change_color(&mut self, index: u8, color: Color) -> () {
+        match &mut self.parser {
+            ParserTypes::PaletteParser(ref mut parser) => parser.set_color(index, color),
+            _ => {}
+        };
+    }
+
+    async fn change_protocol(&mut self, protocol: &Protocol) -> io::Result<()> {
         match protocol {
             #[cfg(feature = "text")]
             Protocol::Text => self.parser = ParserTypes::TextParser(TextParser::default()),
             #[cfg(not(feature = "text"))]
             Protocol::Text => {
-                self.writer.write(b"feature \"text\" is not enabled.");
-                self.writer.flush();
+                self.writer
+                    .write_all(b"feature \"text\" is not enabled.")
+                    .await?;
+                self.writer.flush().await?;
             }
             #[cfg(feature = "binary")]
             Protocol::Binary => self.parser = ParserTypes::BinaryParser(BinaryParser::default()),
             #[cfg(not(feature = "binary"))]
             Protocol::Binary => {
-                self.writer.write(b"feature \"binary\" is not enabled.");
-                self.writer.flush();
+                self.writer
+                    .write_all(b"feature \"binary\" is not enabled.")
+                    .await?;
+                self.writer.flush().await?;
+            }
+            #[cfg(feature = "palette")]
+            Protocol::Palette => self.parser = ParserTypes::PaletteParser(PaletteParser::default()),
+            #[cfg(not(feature = "palette"))]
+            Protocol::Palette => {
+                self.writer
+                    .write_all(b"feature \"binary\" is not enabled.")
+                    .await?;
+                self.writer.flush().await?;
             }
         }
+        Ok(())
     }
 
     pub fn new(reader: R, writer: W, grids: Arc<[grid::Flut<u32>]>) -> Self {
@@ -193,8 +222,12 @@ where
                             break 'outer;
                         }
                         Ok(Command::ChangeProtocol(protocol)) => {
-                            self.change_protocol(&protocol);
+                            self.change_protocol(&protocol).await?;
                             break 'outer;
+                        }
+                        #[cfg(feature = "palette")]
+                        Ok(Command::ChangeColor(index, color)) => {
+                            self.change_color(index, color);
                         }
                         Err(err) if err.kind() == ErrorKind::UnexpectedEof => {
                             tracing::error!("Process socket got error: {err:?}");
