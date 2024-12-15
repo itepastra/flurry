@@ -34,13 +34,21 @@ async fn save_image_frames(
     loop {
         timer.tick().await;
         for grid in grids.as_ref() {
-            let p = base_dir.join(format!(
-                "{}",
-                chrono::Local::now().format("%Y-%m-%d_%H-%M-%S.jpg")
+            let pc = base_dir.join(format!(
+                "{}-canvas.jpg",
+                chrono::Local::now().format("%Y-%m-%d_%H-%M-%S")
             ));
-            let mut file_writer = File::create(p)?;
-
+            let mut file_writer = File::create(pc)?;
             file_writer.write_all(&grid.read_jpg_buffer())?;
+            #[cfg(feature = "auth")]
+            {
+                let pb = base_dir.join(format!(
+                    "{}-blame.png",
+                    chrono::Local::now().format("%Y-%m-%d_%H-%M-%S")
+                ));
+                let mut file_writer = File::create(pb)?;
+                file_writer.write_all(&grid.read_blame_buffer())?;
+            }
         }
     }
 }
@@ -73,6 +81,8 @@ async fn jpeg_update_loop(grids: Arc<[Flut<u32>]>) -> AsyncResult<Never> {
         interval.tick().await;
         for grid in grids.as_ref() {
             grid.update_jpg_buffer();
+            #[cfg(feature = "auth")]
+            grid.update_blame_buffer();
         }
     }
 }
