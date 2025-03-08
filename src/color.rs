@@ -2,11 +2,21 @@ use std::fmt::Display;
 
 use rand::{distr::StandardUniform, prelude::Distribution};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Color {
     RGB24(u8, u8, u8),
     RGBA32(u8, u8, u8, u8),
     W8(u8),
+}
+
+impl Color {
+    pub fn to_bytes(&self) -> [u8; 4] {
+        match self {
+            Color::RGB24(r, g, b) => [*r, *g, *b, 0xff],
+            Color::RGBA32(r, g, b, a) => [*r, *g, *b, *a],
+            Color::W8(w) => [*w, *w, *w, 0xff],
+        }
+    }
 }
 
 impl Display for Color {
