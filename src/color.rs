@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use rand::{distributions::Standard, prelude::Distribution};
+use rand::{distr::StandardUniform, prelude::Distribution};
 
 #[derive(Debug, PartialEq)]
 pub enum Color {
@@ -19,13 +19,13 @@ impl Display for Color {
     }
 }
 
-impl Distribution<Color> for Standard {
+impl Distribution<Color> for StandardUniform {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> Color {
-        let index: u8 = rng.gen_range(0..3);
+        let index: u8 = rng.random_range(0..3);
         match index {
-            0 => Color::W8(rng.gen()),
-            1 => Color::RGB24(rng.gen(), rng.gen(), rng.gen()),
-            2 => Color::RGBA32(rng.gen(), rng.gen(), rng.gen(), rng.gen()),
+            0 => Color::W8(rng.random()),
+            1 => Color::RGB24(rng.random(), rng.random(), rng.random()),
+            2 => Color::RGBA32(rng.random(), rng.random(), rng.random(), rng.random()),
             _ => unreachable!(),
         }
     }
