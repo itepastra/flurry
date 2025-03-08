@@ -40,7 +40,7 @@ pub async fn serve(ctx: WebApiContext) -> AsyncResult<Never> {
     let app = Router::new()
         .route("/imgstream", get(image_stream))
         .route("/stats", get(stats_stream))
-        .nest_service("/", assets)
+        .fallback_service(assets)
         .with_state(ctx)
         // logging middleware
         .layer(
