@@ -12,9 +12,9 @@ pub enum Color {
 impl Display for Color {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Color::RGB24(r, g, b) => write!(f, "#{:02X}{:02X}{:02X}FF", r, g, b),
-            Color::RGBA32(r, g, b, a) => write!(f, "#{:02X}{:02X}{:02X}{:02X}", r, g, b, a),
-            Color::W8(w) => write!(f, "#{:02X}{:02X}{:02X}FF", w, w, w),
+            Color::RGB24(r, g, b) => write!(f, "#{r:02X}{g:02X}{b:02X}FF"),
+            Color::RGBA32(r, g, b, a) => write!(f, "#{r:02X}{g:02X}{b:02X}{a:02X}"),
+            Color::W8(w) => write!(f, "#{w:02X}{w:02X}{w:02X}FF"),
         }
     }
 }

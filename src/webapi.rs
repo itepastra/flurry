@@ -89,7 +89,7 @@ fn make_image_stream(
 fn make_stats() -> Message {
     let pixels: u64 = COUNTER.load(std::sync::atomic::Ordering::Relaxed);
     let clients: u64 = CLIENTS.load(std::sync::atomic::Ordering::Relaxed);
-    format!("{{\"c\":{}, \"p\":{}}}", clients, pixels).into()
+    format!("{{\"c\":{clients}, \"p\":{pixels}}}").into()
 }
 
 async fn stats_stream(ws: WebSocketUpgrade) -> Response {

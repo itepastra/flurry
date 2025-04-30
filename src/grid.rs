@@ -60,19 +60,19 @@ impl<T> Flut<T> {
 impl<T> Grid<Coordinate, T> for Flut<T> {
     fn get(&self, x: Coordinate, y: Coordinate) -> Option<&T> {
         self.index(x, y)
-            .map(|idx| unsafe { &(*self.cells.get())[idx] })
+            .map(|idx| unsafe { &(&(*self.cells.get()))[idx] })
     }
 
     fn set(&self, x: Coordinate, y: Coordinate, value: T) {
         match self.index(x, y) {
             None => (),
-            Some(idx) => unsafe { (*self.cells.get())[idx] = value },
+            Some(idx) => unsafe { (&mut (*self.cells.get()))[idx] = value },
         }
     }
 
     fn get_unchecked(&self, x: Coordinate, y: Coordinate) -> &T {
         let idx = y as usize * self.size_x + x as usize;
-        unsafe { &(*self.cells.get())[idx] }
+        unsafe { &(&(*self.cells.get()))[idx] }
     }
 }
 
