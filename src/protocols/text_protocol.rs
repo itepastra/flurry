@@ -153,12 +153,12 @@ impl<W: AsyncWriteExt + std::marker::Unpin> Responder<W> for TextParser {
                     match protocol {
                         crate::ProtocolStatus::Enabled(proto) => {
                             writer
-                                .write_all(format!("Enabled: {}\n", proto).as_bytes())
+                                .write_all(format!("Enabled: {proto}\n").as_bytes())
                                 .await?;
                         }
                         crate::ProtocolStatus::Disabled(proto) => {
                             writer
-                                .write_all(format!("Disabled: {}\n", proto).as_bytes())
+                                .write_all(format!("Disabled: {proto}\n").as_bytes())
                                 .await?;
                         }
                     }
