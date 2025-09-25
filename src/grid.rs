@@ -18,7 +18,7 @@ pub trait Grid<I, V> {
 pub struct Flut<T> {
     size_x: usize,
     size_y: usize,
-    cells: SyncUnsafeCell<Vec<T>>,
+    cells: SyncUnsafeCell<Box<[T]>>,
     last_hash: SyncUnsafeCell<u64>,
     jpgbuf: RwLock<Vec<u8>>,
 }
@@ -32,7 +32,7 @@ impl<T: Clone> Flut<T> {
         Flut {
             size_x,
             size_y,
-            cells: vec.into(),
+            cells: vec.into_boxed_slice().into(),
             last_hash: 0.into(),
             jpgbuf: RwLock::new(Vec::new()),
         }
