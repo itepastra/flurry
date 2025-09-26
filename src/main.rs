@@ -12,7 +12,7 @@ use flurry::{
     flutclient::{FlutClient, ParserTypes},
     grid::{self, Flut},
     webapi::WebApiContext,
-    AsyncResult,
+    AsyncResult, CLIENTS,
 };
 use futures::never::Never;
 use tokio::{net::TcpListener, time::interval, try_join};
@@ -67,11 +67,10 @@ async fn handle_flut(
         handles.push(tokio::spawn(async move {
             let (reader, writer) = socket.split();
             let mut connection = FlutClient::new(reader, writer, grids);
+            CLIENTS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let resp = connection.process_socket().await;
-            match resp {
-                Ok(()) => Ok(()),
-                Err(err) => Err(err),
-            }
+            CLIENTS.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+            resp
         }))
     }
 }

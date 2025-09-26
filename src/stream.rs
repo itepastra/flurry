@@ -1,7 +1,7 @@
 use axum::http::{self, HeaderMap, HeaderValue};
 use axum_streams::StreamingFormat;
 use futures::StreamExt;
-use rand::{distributions::Standard, thread_rng, Rng};
+use rand::{distr::StandardUniform, rng, Rng};
 
 pub(crate) struct Multipart {
     first: bool,
@@ -11,8 +11,8 @@ pub(crate) struct Multipart {
 
 impl Multipart {
     pub(crate) fn new(boundary_length: usize, headers: HeaderMap) -> Self {
-        let boundary = thread_rng()
-            .sample_iter(Standard)
+        let boundary = rng()
+            .sample_iter(StandardUniform)
             .filter(|c| match c {
                 32..127 | 128..=255 => true,
                 0..32 | 127 => false,

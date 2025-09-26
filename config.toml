@@ -1,1 +1,1 @@
--C target-cpu=native
+target-cpu = "native"

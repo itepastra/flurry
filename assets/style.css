@@ -1,0 +1,30 @@
+:root {
+	--background-primary: rgba(2, 0, 36, 1);
+	--background-secondary: rgba(0, 0, 0, 1);
+}
+
+body {
+	background: var(--background-primary);
+	background: radial-gradient(circle, var(--background-primary) 0%, var(--background-secondary) 100%);
+	background-repeat: no-repeat;
+	background-attachment: fixed;
+	height: 100%;
+}
+
+body>div {
+	max-width: fit-content;
+	margin-inline: auto;
+	background: #DDDDDD;
+	margin-top: 3rem;
+	padding: 0.75rem;
+	border-radius: 1.5rem;
+}
+
+img.grid {
+	border-radius: 0.75rem;
+	max-width: 80vw;
+	min-width: 60vw;
+	height: auto;
+	image-rendering: pixelated;
+	user-select: none;
+}

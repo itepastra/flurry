@@ -25,12 +25,12 @@ fn parse_coordinate(string: &str) -> io::Result<Coordinate> {
 type HexChar = u8;
 
 fn val(c1: u8, c2: u8) -> io::Result<HexChar> {
-    Ok((match c1 {
+    Ok(((match c1 {
         b'A'..=b'F' => c1 - b'A' + 10,
         b'a'..=b'f' => c1 - b'a' + 10,
         b'0'..=b'9' => c1 - b'0',
         _ => return Err(Error::from(ErrorKind::InvalidInput)),
-    }) << 4
+    }) << 4)
         | (match c2 {
             b'A'..=b'F' => c2 - b'A' + 10,
             b'a'..=b'f' => c2 - b'a' + 10,
@@ -153,12 +153,12 @@ impl<W: AsyncWriteExt + std::marker::Unpin> Responder<W> for TextParser {
                     match protocol {
                         crate::ProtocolStatus::Enabled(proto) => {
                             writer
-                                .write_all(format!("Enabled: {}\n", proto).as_bytes())
+                                .write_all(format!("Enabled: {proto}\n").as_bytes())
                                 .await?;
                         }
                         crate::ProtocolStatus::Disabled(proto) => {
                             writer
-                                .write_all(format!("Disabled: {}\n", proto).as_bytes())
+                                .write_all(format!("Disabled: {proto}\n").as_bytes())
                                 .await?;
                         }
                     }
