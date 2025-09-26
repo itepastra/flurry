@@ -18,7 +18,7 @@ pub trait Grid<I, V> {
 pub struct Flut<T> {
     size_x: usize,
     size_y: usize,
-    cells: SyncUnsafeCell<Vec<T>>,
+    cells: SyncUnsafeCell<Box<[T]>>,
     last_hash: SyncUnsafeCell<u64>,
     jpgbuf: RwLock<Vec<u8>>,
 }
@@ -32,7 +32,7 @@ impl<T: Clone> Flut<T> {
         Flut {
             size_x,
             size_y,
-            cells: vec.into(),
+            cells: vec.into_boxed_slice().into(),
             last_hash: 0.into(),
             jpgbuf: RwLock::new(Vec::new()),
         }
@@ -128,7 +128,10 @@ mod tests {
     async fn test_grid_init_values() {
         let grid = Flut::init(3, 3, 0);
 
-        assert_eq!(grid.cells.into_inner(), vec![0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(
+            grid.cells.into_inner(),
+            vec![0, 0, 0, 0, 0, 0, 0, 0, 0].into()
+        );
     }
 
     #[tokio::test]
@@ -144,7 +147,10 @@ mod tests {
         let grid = Flut::init(3, 3, 0);
         grid.set(1, 1, 255);
         grid.set(2, 1, 256);
-        assert_eq!(grid.cells.into_inner(), vec![0, 0, 0, 0, 255, 256, 0, 0, 0]);
+        assert_eq!(
+            grid.cells.into_inner(),
+            vec![0, 0, 0, 0, 255, 256, 0, 0, 0].into()
+        );
     }
 
     #[tokio::test]
@@ -152,7 +158,10 @@ mod tests {
         let grid = Flut::init(3, 3, 0);
         grid.set(1, 1, 255);
         grid.set(3, 1, 256);
-        assert_eq!(grid.cells.into_inner(), vec![0, 0, 0, 0, 255, 0, 0, 0, 0]);
+        assert_eq!(
+            grid.cells.into_inner(),
+            vec![0, 0, 0, 0, 255, 0, 0, 0, 0].into()
+        );
     }
 
     #[tokio::test]
