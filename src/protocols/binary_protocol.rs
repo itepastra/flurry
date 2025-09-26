@@ -113,12 +113,12 @@ To set a pixel using RGB, use ({SET_PX_RGB_BIN:02X}) (u8 canvas) (x as u16_le) (
                     match protocol {
                         crate::ProtocolStatus::Enabled(proto) => {
                             writer
-                                .write_all(format!("Enabled: {}\n", proto).as_bytes())
+                                .write_all(format!("Enabled: {proto}\n").as_bytes())
                                 .await?;
                         }
                         crate::ProtocolStatus::Disabled(proto) => {
                             writer
-                                .write_all(format!("Disabled: {}\n", proto).as_bytes())
+                                .write_all(format!("Disabled: {proto}\n").as_bytes())
                                 .await?;
                         }
                     }

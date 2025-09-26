@@ -1,5 +1,6 @@
 use std::{
     cell::SyncUnsafeCell,
+    hash::{DefaultHasher, Hash, Hasher},
     sync::{RwLock, RwLockReadGuard},
 };
 
@@ -17,7 +18,8 @@ pub trait Grid<I, V> {
 pub struct Flut<T> {
     size_x: usize,
     size_y: usize,
-    cells: SyncUnsafeCell<Vec<T>>,
+    cells: SyncUnsafeCell<Box<[T]>>,
+    last_hash: SyncUnsafeCell<u64>,
     jpgbuf: RwLock<Vec<u8>>,
 }
 
@@ -30,7 +32,8 @@ impl<T: Clone> Flut<T> {
         Flut {
             size_x,
             size_y,
-            cells: vec.into(),
+            cells: vec.into_boxed_slice().into(),
+            last_hash: 0.into(),
             jpgbuf: RwLock::new(Vec::new()),
         }
     }
@@ -57,19 +60,19 @@ impl<T> Flut<T> {
 impl<T> Grid<Coordinate, T> for Flut<T> {
     fn get(&self, x: Coordinate, y: Coordinate) -> Option<&T> {
         self.index(x, y)
-            .map(|idx| unsafe { &(*self.cells.get())[idx] })
+            .map(|idx| unsafe { &(&(*self.cells.get()))[idx] })
     }
 
     fn set(&self, x: Coordinate, y: Coordinate, value: T) {
         match self.index(x, y) {
             None => (),
-            Some(idx) => unsafe { (*self.cells.get())[idx] = value },
+            Some(idx) => unsafe { (&mut (*self.cells.get()))[idx] = value },
         }
     }
 
     fn get_unchecked(&self, x: Coordinate, y: Coordinate) -> &T {
         let idx = y as usize * self.size_x + x as usize;
-        unsafe { &(*self.cells.get())[idx] }
+        unsafe { &(&(*self.cells.get()))[idx] }
     }
 }
 
@@ -89,7 +92,21 @@ impl GenericImageView for Flut<u32> {
 }
 
 impl Flut<u32> {
+    pub fn check_changed(&self) -> bool {
+        let previous = unsafe { *self.last_hash.get() };
+        let mut hasher = DefaultHasher::new();
+        unsafe { (*self.cells.get()).hash(&mut hasher) };
+        if hasher.finish() == previous {
+            return false;
+        }
+        unsafe { *self.last_hash.get() = hasher.finish() }
+        true
+    }
+
     pub fn update_jpg_buffer(&self) {
+        if !self.check_changed() {
+            return;
+        }
         let mut jpgbuf = self.jpgbuf.write().expect("Could not get write RWlock");
         jpgbuf.clear();
         let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut *jpgbuf, 50);

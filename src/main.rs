@@ -8,27 +8,15 @@ use std::{
 };
 
 use flurry::{
-    config::{
-        GRID_LENGTH, HOST, IMAGE_SAVE_INTERVAL, JPEG_UPDATE_INTERVAL, STDOUT_STATISTICS_INTERVAL,
-    },
+    config::{GRID_LENGTH, HOST, IMAGE_SAVE_INTERVAL, JPEG_UPDATE_INTERVAL},
     flutclient::{FlutClient, ParserTypes},
     grid::{self, Flut},
     webapi::WebApiContext,
-    AsyncResult, COUNTER,
+    AsyncResult, CLIENTS,
 };
 use futures::never::Never;
 use tokio::{net::TcpListener, time::interval, try_join};
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
-
-/// This function logs the current amount of changed pixels to stdout every second
-async fn pixel_change_stdout_log() -> AsyncResult<Never> {
-    let mut interval = tokio::time::interval(STDOUT_STATISTICS_INTERVAL);
-    loop {
-        interval.tick().await;
-        let cnt = COUNTER.load(std::sync::atomic::Ordering::Relaxed);
-        tracing::info!("{cnt} pixels changed");
-    }
-}
 
 /// This function starts a timer that saves the current grid state every `duration`.
 /// These images may then be used for moderation or timelapses
@@ -71,11 +59,10 @@ async fn handle_flut(
         handles.push(tokio::spawn(async move {
             let (reader, writer) = socket.split();
             let mut connection = FlutClient::new(reader, writer, grids);
+            CLIENTS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let resp = connection.process_socket().await;
-            match resp {
-                Ok(()) => Ok(()),
-                Err(err) => Err(err),
-            }
+            CLIENTS.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+            resp
         }))
     }
 }
@@ -97,7 +84,7 @@ async fn main() {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                format!("{}=debug,tower_http=debug", env!("CARGO_CRATE_NAME")).into()
+                format!("{}=info,tower_http=info", env!("CARGO_CRATE_NAME")).into()
             }),
         )
         .with(tracing_subscriber::fmt::layer())
@@ -116,7 +103,6 @@ async fn main() {
     };
     tracing::info!("Started TCP listener on {HOST}");
 
-    let pixel_logger = tokio::spawn(pixel_change_stdout_log());
     let snapshots = tokio::spawn(save_image_frames(grids.clone(), IMAGE_SAVE_INTERVAL));
     let pixelflut_server = tokio::spawn(handle_flut(flut_listener, grids.clone()));
     let jpeg_update_loop = tokio::spawn(jpeg_update_loop(grids.clone()));
@@ -125,7 +111,6 @@ async fn main() {
     }));
 
     let res = try_join! {
-        pixel_logger,
         snapshots,
         pixelflut_server,
         jpeg_update_loop,

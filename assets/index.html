@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Flurry</title>
+	<link href="/style.css" rel="stylesheet">
+	<script src="/stats.js"></script>
+</head>
+
+<body>
+	<div>
+		<img class="grid" src="/imgstream?canvas=0" draggable="false" alt="Pixelflut canvas">
+		<table>
+			<thead>
+				<tr>
+					<th>Stat</th>
+					<th>Total</th>
+					<th>Last Second</th>
+				</tr>
+			</thead>
+			<tbody>
+				<tr>
+					<td>Pixels changed in main</td>
+					<td id="pixelCounter">Loading...</td>
+					<td id="pixelCounterAvg">Loading...</td>
+				</tr>
+			</tbody>
+		</table>
+		<table>
+			<tbody>
+				<tr>
+					<td>Clients Connected right now</td>
+					<td id="clientCounter">Loading...</td>
+				</tr>
+			</tbody>
+		</table>
+	</div>
+</body>
+
+</html>
