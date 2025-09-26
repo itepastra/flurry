@@ -4,9 +4,12 @@
 
 use std::sync::atomic::AtomicU64;
 
+#[cfg(feature = "auth")]
+use blame::User;
 pub use color::Color;
 use grid::Grid;
 
+pub(crate) mod blame;
 pub mod config;
 pub mod flutclient;
 pub mod grid;
@@ -31,9 +34,16 @@ fn set_pixel_rgba(
     x: Coordinate,
     y: Coordinate,
     rgb: u32,
+    #[cfg(feature = "auth")] user: User,
 ) {
     if let Some(grid) = grids.get(canvas as usize) {
-        grid.set(x, y, rgb);
+        grid.set(
+            x,
+            y,
+            rgb,
+            #[cfg(feature = "auth")]
+            user,
+        );
     }
 }
 

@@ -4,15 +4,16 @@ use std::{
     sync::{RwLock, RwLockReadGuard},
 };
 
-use image::{GenericImageView, Rgb};
-
+#[cfg(feature = "auth")]
+use crate::blame::{BlameMap, User};
 use crate::Coordinate;
+use image::{GenericImageView, Rgb};
 
 pub trait Grid<I, V> {
     fn get(&self, x: I, y: I) -> Option<&V>;
     #[allow(dead_code)]
     fn get_unchecked(&self, x: I, y: I) -> &V;
-    fn set(&self, x: I, y: I, value: V);
+    fn set(&self, x: I, y: I, value: V, #[cfg(feature = "auth")] user: User);
 }
 
 pub struct Flut<T> {
@@ -21,6 +22,10 @@ pub struct Flut<T> {
     cells: SyncUnsafeCell<Box<[T]>>,
     last_hash: SyncUnsafeCell<u64>,
     jpgbuf: RwLock<Vec<u8>>,
+    #[cfg(feature = "auth")]
+    blamebuf: RwLock<Vec<u8>>,
+    #[cfg(feature = "auth")]
+    blame: BlameMap,
 }
 
 impl<T: Clone> Flut<T> {
@@ -35,6 +40,10 @@ impl<T: Clone> Flut<T> {
             cells: vec.into_boxed_slice().into(),
             last_hash: 0.into(),
             jpgbuf: RwLock::new(Vec::new()),
+            #[cfg(feature = "auth")]
+            blamebuf: RwLock::new(Vec::new()),
+            #[cfg(feature = "auth")]
+            blame: BlameMap::new(size_x, size_y),
         }
     }
 
@@ -53,7 +62,15 @@ impl<T> Flut<T> {
         Some((y * self.size_x) + x)
     }
     pub fn read_jpg_buffer(&self) -> RwLockReadGuard<'_, Vec<u8>> {
-        self.jpgbuf.read().expect("RWlock didn't exit nicely")
+        self.jpgbuf
+            .read()
+            .expect("canvas RWlock didn't exit nicely")
+    }
+    #[cfg(feature = "auth")]
+    pub fn read_blame_buffer(&self) -> RwLockReadGuard<'_, Vec<u8>> {
+        self.blamebuf
+            .read()
+            .expect("blame RWlock didn't exit nicely")
     }
 }
 
@@ -63,11 +80,13 @@ impl<T> Grid<Coordinate, T> for Flut<T> {
             .map(|idx| unsafe { &(&(*self.cells.get()))[idx] })
     }
 
-    fn set(&self, x: Coordinate, y: Coordinate, value: T) {
+    fn set(&self, x: Coordinate, y: Coordinate, value: T, #[cfg(feature = "auth")] user: User) {
         match self.index(x, y) {
             None => (),
             Some(idx) => unsafe { (&mut (*self.cells.get()))[idx] = value },
         }
+        #[cfg(feature = "auth")]
+        self.blame.set_blame(x, y, user);
     }
 
     fn get_unchecked(&self, x: Coordinate, y: Coordinate) -> &T {
@@ -114,6 +133,21 @@ impl Flut<u32> {
         match subimage.write_with_encoder(encoder) {
             Ok(_) => {}
             Err(err) => tracing::error!("Error writing jpeg buffer: {:?}", err),
+        }
+    }
+
+    #[cfg(feature = "auth")]
+    pub fn update_blame_buffer(&self) {
+        let mut blamebuf = self.blamebuf.write().expect("Could not get write RWlock");
+        blamebuf.clear();
+        let encoder = image::codecs::png::PngEncoder::new(&mut *blamebuf);
+        let subimage = self
+            .blame
+            .view(0, 0, self.width(), self.height())
+            .to_image();
+        match subimage.write_with_encoder(encoder) {
+            Ok(_) => {}
+            Err(err) => tracing::error!("Error writing png buffer: {:?}", err),
         }
     }
 }
@@ -167,14 +201,26 @@ mod tests {
     #[tokio::test]
     async fn test_grid_get() {
         let grid = Flut::init(3, 3, 0);
-        grid.set(1, 2, 222);
+        grid.set(
+            1,
+            2,
+            222,
+            #[cfg(feature = "auth")]
+            0,
+        );
         assert_eq!(grid.get(1, 2), Some(&222));
     }
 
     #[tokio::test]
     async fn test_grid_get_out_of_range() {
         let grid = Flut::init(3, 3, 0);
-        grid.set(3, 1, 256);
+        grid.set(
+            3,
+            1,
+            256,
+            #[cfg(feature = "auth")]
+            0,
+        );
         assert_eq!(grid.get(3, 1), None);
         assert_eq!(grid.get(1, 2), Some(&0));
     }

@@ -3,8 +3,8 @@ use std::{
     sync::Arc,
 };
 
-use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
-
+#[cfg(feature = "auth")]
+use crate::{blame::User, config::AUTH_SERVER_URL};
 use crate::{
     get_pixel,
     grid::{self, Flut},
@@ -12,6 +12,13 @@ use crate::{
     protocols::{BinaryParser, IOProtocol, Parser, Responder, TextParser},
     set_pixel_rgba, Canvas, Color, Command, Coordinate, Protocol, ProtocolStatus, Response,
 };
+#[cfg(feature = "auth")]
+use bytes::Buf;
+#[cfg(feature = "auth")]
+use reqwest::{Client, ClientBuilder};
+#[cfg(feature = "auth")]
+use tokio::io::AsyncBufReadExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
 
 macro_rules! build_parser_type_enum {
     ($($name:ident: $t:ty: $feat:expr,)*) => {
@@ -85,6 +92,10 @@ where
     grids: Arc<[Flut<u32>]>,
     parser: ParserTypes,
     counter: u64,
+    #[cfg(feature = "auth")]
+    auth_client: Client,
+    #[cfg(feature = "auth")]
+    user: User,
 }
 
 impl<R, W> FlutClient<R, W>
@@ -140,7 +151,15 @@ where
             }
             Color::W8(white) => u32::from_be_bytes([*white, *white, *white, 0xff]),
         };
-        set_pixel_rgba(self.grids.as_ref(), canvas, x, y, c);
+        set_pixel_rgba(
+            self.grids.as_ref(),
+            canvas,
+            x,
+            y,
+            c,
+            #[cfg(feature = "auth")]
+            self.user,
+        );
         self.counter += 1;
     }
 
@@ -174,10 +193,49 @@ where
             grids,
             parser: ParserTypes::default(),
             counter: 0,
+            #[cfg(feature = "auth")]
+            auth_client: ClientBuilder::new().https_only(true).build().unwrap(),
+            #[cfg(feature = "auth")]
+            user: 0,
         }
     }
 
     pub async fn process_socket(&mut self) -> io::Result<()> {
+        // Handle the auth flow
+        #[cfg(feature = "auth")]
+        {
+            let mut buf = Vec::new();
+            let chars = self.reader.read_until(b' ', &mut buf).await?;
+            if chars != 5 {
+                return Err(Error::from(ErrorKind::PermissionDenied));
+            }
+            if buf != b"AUTH " {
+                return Err(Error::from(ErrorKind::PermissionDenied));
+            }
+
+            buf.clear();
+            let token_length = self.reader.read_until(b'\n', &mut buf).await?;
+
+            if token_length > 100 {
+                return Err(Error::from(ErrorKind::PermissionDenied));
+            }
+
+            let request = self
+                .auth_client
+                .post(AUTH_SERVER_URL)
+                .body(buf)
+                .build()
+                .unwrap();
+            let response = self.auth_client.execute(request).await.unwrap();
+            if response.status() != 200 {
+                return Err(Error::from(ErrorKind::PermissionDenied));
+            }
+
+            let user = response.bytes().await.unwrap().get_u32();
+
+            tracing::info!("User with id {user} authenticated");
+            self.user = user;
+        }
         loop {
             match_parser!(parser: &self.parser.clone() => 'outer: loop {
                 for _ in 0..1000 {
