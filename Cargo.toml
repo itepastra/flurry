@@ -32,6 +32,7 @@ default = ["text", "binary"]
 all = ["text", "binary"]
 text = ["dep:atoi_radix10"]
 binary = []
+palette = []
 
 [dev-dependencies]
 tempfile = "*"

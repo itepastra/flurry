@@ -1,9 +1,11 @@
 mod binary_protocol;
+mod palette_protocol;
 mod text_protocol;
 
 use std::io;
 
 pub use binary_protocol::BinaryParser;
+pub use palette_protocol::PaletteParser;
 pub use text_protocol::TextParser;
 use tokio::io::AsyncWriteExt;
 
